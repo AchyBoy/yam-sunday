@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v5.2">
+<meta name="x-yam-version" content="v5.3">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -500,15 +500,20 @@
 
   document.getElementById('print').addEventListener('click', function(){ window.print(); });
 
+  /* No link in the shared text: the men who get this are reading it, not
+     tapping it, and the address ate four lines. Names go one to a line, a
+     comma run of nine wrapped into a paragraph nobody could count. */
   function asText(){
-    var out = 'YAM · ' + when.value + '\n' + location.href + '\n\n';
+    var out = 'YAM · ' + when.value + '\n\n';
     data.jobs.forEach(function(j){
       out += (j.lbl || '?') + ': ' + (j.who.trim() || 'still open') + '\n';
     });
     var here = data.kids.filter(function(k){ return k.here; });
     if (data.kids.length){
-      out += '\nHere (' + here.length + ' of ' + data.kids.length + '): ' +
-             (here.length ? here.map(function(k){ return k.name; }).join(', ') : 'nobody yet') + '\n';
+      out += '\nHere, ' + here.length + ' of ' + data.kids.length + ':\n';
+      out += here.length
+        ? here.map(function(k){ return k.name; }).join('\n') + '\n'
+        : 'nobody yet\n';
     }
     return out;
   }
