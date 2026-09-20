@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="x-yam-version" content="v3.2">
+<title>YAM, who has what</title>
+<style>
+  :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; background:var(--deep); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; -webkit-text-size-adjust:100%}
+  .wrap{max-width:560px; margin:0 auto; padding:0 18px 70px}
+  header{padding:34px 0 6px; text-align:center}
+  .kicker{font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--gold); font-weight:700}
+  h1{font-family:Georgia,"Times New Roman",serif; font-weight:400; font-size:clamp(28px,8.5vw,42px); margin:9px 0 4px}
+  .when input{background:none; border:0; color:var(--dim); font:inherit; font-size:16px; text-align:center;
+    width:100%; padding:4px}
+  .when input:focus{outline:0; color:var(--ink)}
+
+  h2{font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); font-weight:700;
+     margin:30px 0 12px; display:flex; align-items:center; gap:10px}
+  h2 .c{margin-left:auto; color:var(--dim); letter-spacing:.04em; text-transform:none; font-size:13px; font-weight:600}
+
+  /* adults */
+  .job{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:11px 14px; margin:0 0 9px;
+       display:flex; align-items:center; gap:12px}
+  .job .lbl{flex:0 0 108px; font-size:13px; color:var(--dim); letter-spacing:.02em}
+  .job .lbl input{width:100%; background:none; border:0; color:var(--dim); font:inherit; padding:2px 0}
+  .job .nm{flex:1; min-width:0}
+  .job .nm input{width:100%; background:none; border:0; color:var(--ink); font:inherit; font-size:17px;
+    font-weight:600; padding:2px 0}
+  .job input:focus{outline:0}
+  .job input::placeholder{color:#6b5e4b; font-weight:400}
+  .job.filled{border-color:#4a3616}
+  .kill{background:none; border:0; color:#6b5e4b; font-size:19px; line-height:1; padding:2px 3px; cursor:pointer;
+    display:none}
+  body.editing .kill{display:block}
+
+  /* kids */
+  .kids{display:flex; flex-wrap:wrap; gap:9px}
+  .kid{background:var(--card); border:1px solid var(--line); color:var(--ink); border-radius:999px;
+    padding:11px 17px; font-size:16px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px}
+  .kid .dot{width:9px; height:9px; border-radius:50%; background:#3b3025}
+  .kid.here{background:var(--gold); border-color:var(--gold); color:#171009}
+  .kid.here .dot{background:#171009}
+  .kid:active{opacity:.75}
+  .kid .x{color:inherit; opacity:.55; font-size:17px; margin-left:2px; display:none}
+  body.editing .kid .x{display:inline}
+  .addkid{background:none; border:1px dashed var(--line); color:var(--dim); border-radius:999px;
+    padding:11px 17px; font-size:16px; cursor:pointer}
+  .empty{color:#7c6e59; font-size:14px; line-height:1.55; margin:0 2px}
+
+  .row{display:flex; gap:9px; margin-top:22px; flex-wrap:wrap}
+  .row button{flex:1; min-width:110px; background:#221b14; border:1px solid var(--line); color:var(--ink);
+    border-radius:12px; padding:13px 10px; font-size:15px; font-weight:600; cursor:pointer}
+  .row button.go{background:var(--gold); border-color:var(--gold); color:#171009}
+  .row button.on{border-color:var(--gold); color:var(--gold)}
+  .row button:active{opacity:.75}
+  .hint{color:#7c6e59; font-size:13px; line-height:1.55; margin:16px 2px 0; text-align:center}
+  .toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--gold); color:#171009;
+    padding:11px 20px; border-radius:999px; font-size:15px; font-weight:700; opacity:0; pointer-events:none;
+    transition:opacity .2s}
+  .toast.on{opacity:1}
+  footer{text-align:center; color:#5e5344; font-size:12px; padding:28px 0 0}
+  @media print{
+    html,body{background:#fff; color:#000}
+    .job,.kid{border:1px solid #bbb; background:#fff!important; color:#000!important}
+    .kid:not(.here){opacity:.35}
+    .job .lbl input{color:#555} .job .nm input{color:#000}
+    .row,.kill,.hint,footer,.toast,.addkid{display:none!important}
+    h2{color:#000}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">Young Adult Men</div>
+    <h1>Who has what</h1>
+    <div class="when"><input id="when" value="Sunday morning, September 21"></div>
+  </header>
+
+  <h2>The men <span class="c" id="jobsLeft"></span></h2>
+  <div id="jobs"></div>
+
+  <h2>Who is here <span class="c" id="count"></span></h2>
+  <div class="kids" id="kids"></div>
+  <p class="empty" id="empty">Add the young men once and they stay on here. Tap a name Sunday
+     morning and it turns gold.</p>
+
+  <div class="row">
+    <button id="edit">Edit names</button>
+    <button id="clear">Clear who is here</button>
+  </div>
+  <div class="row">
+    <button id="print">Print</button>
+    <button id="share" class="go">Share it</button>
+  </div>
+
+  <p class="hint">It saves itself, and it saves for everybody, so whoever pulls this up Sunday
+     morning is looking at the same sheet. Works with no signal too, it catches up after.</p>
+  <footer>YAM · <span id="ver"></span> · <span id="sync">…</span></footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  document.getElementById('ver').textContent =
+    document.querySelector('meta[name=x-yam-version]').content;
+
+  var DEFAULT = {
+    when: "Sunday morning, September 21",
+    jobs: [
+      { lbl:"Pre prayer",   who:"" },
+      { lbl:"Worship",      who:"" },
+      { lbl:"Lesson",       who:"" },
+      { lbl:"After lesson", who:"" }
+    ],
+    kids: []
+  };
+
+  var data;
+  try { data = JSON.parse(localStorage.getItem(KEY)) || null; } catch(e){ data = null; }
+  if (!data || !data.jobs) data = JSON.parse(JSON.stringify(DEFAULT));
+  if (!data.kids) data.kids = [];
+
+  var jobsEl = document.getElementById('jobs'),
+      kidsEl = document.getElementById('kids'),
+      when   = document.getElementById('when');
+
+  /* ---------- saving ----------
+     The phone is the source of truth while you are stood in the room with no
+     signal. Every change stamps data.stamp and is pushed to the backend a
+     moment later, last write wins, so the other phones see the same sheet. */
+  var API = 'https://api.jobhubgo.com/api/yam/',
+      pushT = null, pushing = false, lastTouch = 0;
+
+  /* The sheet key rides in the link, because this page is on the open web and
+     the list is boys' first names. No key in the URL means a brand new empty
+     sheet, so a stranger who finds the page sees nothing of ours. Whoever has
+     the link has the sheet, same as a shared document. */
+  var SHEET = (function(){
+    var m = /[#&?]s=([a-z0-9]{4,24})/i.exec(location.hash + location.search);
+    var k = m ? m[1].toLowerCase() : (localStorage.getItem('yam-key') || '');
+    if (!k) k = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+    localStorage.setItem('yam-key', k);
+    try { history.replaceState(null, '', location.pathname + '#s=' + k); } catch(e){}
+    return k;
+  })();
+  var KEY = 'yam-sheet-' + SHEET;
+
+  if (!data.stamp) data.stamp = 0;
+
+  function syncSay(m){ document.getElementById('sync').textContent = m; }
+
+  function save(){
+    data.when = when.value;
+    data.stamp = Date.now();
+    lastTouch = data.stamp;
+    localStorage.setItem(KEY, JSON.stringify(data));
+    syncSay('saving');
+    clearTimeout(pushT);
+    pushT = setTimeout(push, 700);
+  }
+
+  function push(){
+    if (pushing) { clearTimeout(pushT); pushT = setTimeout(push, 700); return; }
+    pushing = true;
+    fetch(API + SHEET, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: data, updatedAt: data.stamp })
+    }).then(function(r){ return r.json(); }).then(function(j){
+      pushing = false;
+      if (j && j.stale && j.data) { adopt(j.data, j.updatedAt); return; }
+      syncSay('saved for everybody');
+    }).catch(function(){
+      pushing = false;
+      syncSay('saved on this phone');
+    });
+  }
+
+  /* Never take a server copy out from under a thumb that is mid word. */
+  function busy(){
+    var a = document.activeElement;
+    return (a && a.tagName === 'INPUT') || (Date.now() - lastTouch < 3000);
+  }
+
+  function adopt(d, stamp){
+    if (!d || !d.jobs) return;
+    d.stamp = Number(stamp) || d.stamp || 0;
+    if (!d.kids) d.kids = [];
+    data = d;
+    localStorage.setItem(KEY, JSON.stringify(data));
+    when.value = data.when || '';
+    drawJobs(); drawKids(); counts();
+    syncSay('up to date');
+  }
+
+  function pull(){
+    fetch(API + SHEET).then(function(r){ return r.json(); }).then(function(j){
+      if (!j || !j.data) {                       // nothing up there yet, seed it
+        if (data.stamp === 0) data.stamp = Date.now();
+        push(); return;
+      }
+      if (Number(j.updatedAt) > (data.stamp || 0) && !busy()) adopt(j.data, j.updatedAt);
+      else syncSay('up to date');
+    }).catch(function(){ syncSay('saved on this phone'); });
+  }
+
+  function counts(){
+    var took = data.jobs.filter(function(j){ return j.who.trim(); }).length,
+        open = data.jobs.length - took,
+        here = data.kids.filter(function(k){ return k.here; }).length;
+    document.getElementById('jobsLeft').textContent =
+      open === 0 ? 'all covered' : open + (open === 1 ? ' still open' : ' still open');
+    document.getElementById('count').textContent =
+      data.kids.length ? here + ' of ' + data.kids.length : '';
+    document.getElementById('empty').style.display = data.kids.length ? 'none' : 'block';
+  }
+
+  function drawJobs(){
+    jobsEl.innerHTML = '';
+    data.jobs.forEach(function(j, i){
+      var d = document.createElement('div');
+      d.className = 'job' + (j.who.trim() ? ' filled' : '');
+
+      var l = document.createElement('span'); l.className = 'lbl';
+      var li = document.createElement('input'); li.value = j.lbl; li.placeholder = 'What';
+      li.addEventListener('input', function(){ j.lbl = li.value; save(); });
+      l.appendChild(li);
+
+      var n = document.createElement('span'); n.className = 'nm';
+      var ni = document.createElement('input'); ni.value = j.who; ni.placeholder = 'nobody yet';
+      ni.addEventListener('input', function(){
+        j.who = ni.value; d.classList.toggle('filled', !!ni.value.trim()); save(); counts();
+      });
+      n.appendChild(ni);
+
+      var k = document.createElement('button');
+      k.className = 'kill'; k.textContent = '×';
+      k.addEventListener('click', function(){ data.jobs.splice(i,1); save(); drawJobs(); counts(); });
+
+      d.appendChild(l); d.appendChild(n); d.appendChild(k);
+      jobsEl.appendChild(d);
+    });
+
+    var add = document.createElement('button');
+    add.className = 'addkid'; add.textContent = '+ Another job';
+    add.style.marginTop = '2px';
+    add.addEventListener('click', function(){
+      data.jobs.push({ lbl:'', who:'' }); save(); drawJobs(); counts();
+      var ins = jobsEl.querySelectorAll('.job:last-of-type input');
+      if (ins.length) ins[0].focus();
+    });
+    jobsEl.appendChild(add);
+  }
+
+  function drawKids(){
+    kidsEl.innerHTML = '';
+    data.kids.forEach(function(k, i){
+      var b = document.createElement('button');
+      b.className = 'kid' + (k.here ? ' here' : '');
+      b.innerHTML = '<span class="dot"></span>' + esc(k.name) + '<span class="x">×</span>';
+      b.addEventListener('click', function(ev){
+        if (document.body.classList.contains('editing')){
+          data.kids.splice(i,1); save(); drawKids(); counts(); return;
+        }
+        k.here = !k.here; save(); drawKids(); counts();
+      });
+      kidsEl.appendChild(b);
+    });
+    var add = document.createElement('button');
+    add.className = 'addkid'; add.textContent = '+ Add a name';
+    add.addEventListener('click', function(){
+      var n = window.prompt('Name');
+      if (!n) return;
+      n.split(',').forEach(function(one){
+        one = one.trim(); if (one) data.kids.push({ name:one, here:false });
+      });
+      save(); drawKids(); counts();
+    });
+    kidsEl.appendChild(add);
+  }
+
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  when.value = data.when;
+  when.addEventListener('input', save);
+  drawJobs(); drawKids(); counts();
+
+  document.getElementById('edit').addEventListener('click', function(){
+    var on = document.body.classList.toggle('editing');
+    this.classList.toggle('on', on);
+    this.textContent = on ? 'Done editing' : 'Edit names';
+  });
+
+  document.getElementById('clear').addEventListener('click', function(){
+    data.kids.forEach(function(k){ k.here = false; });
+    save(); drawKids(); counts(); toast('Cleared');
+  });
+
+  document.getElementById('print').addEventListener('click', function(){ window.print(); });
+
+  function asText(){
+    var out = 'YAM · ' + when.value + '\n' + location.href + '\n\n';
+    data.jobs.forEach(function(j){
+      out += (j.lbl || '?') + ': ' + (j.who.trim() || 'still open') + '\n';
+    });
+    var here = data.kids.filter(function(k){ return k.here; });
+    if (data.kids.length){
+      out += '\nHere (' + here.length + ' of ' + data.kids.length + '): ' +
+             (here.length ? here.map(function(k){ return k.name; }).join(', ') : 'nobody yet') + '\n';
+    }
+    return out;
+  }
+
+  function toast(m){
+    var t = document.getElementById('toast');
+    t.textContent = m; t.classList.add('on');
+    setTimeout(function(){ t.classList.remove('on'); }, 1700);
+  }
+
+  /* pull on open, when the phone comes back, and every 20s while it is up */
+  pull();
+  setInterval(function(){ if (!document.hidden && !busy()) pull(); }, 20000);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) pull(); });
+  window.addEventListener('online', function(){ push(); });
+
+  document.getElementById('share').addEventListener('click', function(){
+    var txt = asText();
+    if (navigator.share){ navigator.share({ title:'YAM, who has what', text: txt }).catch(function(){}); return; }
+    if (navigator.clipboard){
+      navigator.clipboard.writeText(txt).then(function(){ toast('Copied'); },
+        function(){ window.prompt('Copy this', txt); });
+      return;
+    }
+    window.prompt('Copy this', txt);
+  });
+})();
+</script>
+</body>
+</html>
