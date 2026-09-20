@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v4.2">
+<meta name="x-yam-version" content="v5.2">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -70,6 +70,15 @@
     padding:11px 20px; border-radius:999px; font-size:15px; font-weight:700; opacity:0; pointer-events:none;
     transition:opacity .2s}
   .toast.on{opacity:1}
+  .p{background:var(--card); border:1px solid var(--line); border-radius:14px; margin:0 0 9px; overflow:hidden}
+  .p > button{width:100%; background:none; border:0; color:inherit; font:inherit; text-align:left;
+    padding:13px 15px; display:flex; align-items:baseline; gap:10px; cursor:pointer}
+  .p .pd{font-size:16px; font-weight:600}
+  .p .pc{margin-left:auto; color:var(--dim); font-size:13px}
+  .p .body{display:none; padding:0 15px 14px; color:var(--dim); font-size:14px; line-height:1.6}
+  .p.open .body{display:block}
+  .p.open .pd{color:var(--gold)}
+  .p .body b{color:var(--ink); font-weight:600}
   footer{text-align:center; color:#5e5344; font-size:12px; padding:28px 0 0}
   @media print{
     html,body{background:#fff; color:#000}
@@ -87,7 +96,7 @@
   <header>
     <div class="kicker">Young Adult Men</div>
     <h1>Who has what</h1>
-    <div class="when"><input id="when" value="Sunday morning, September 21"></div>
+    <div class="when"><input id="when" value="Sunday morning, September 27"></div>
   </header>
 
   <h2>The men <span class="c" id="jobsLeft"></span></h2>
@@ -105,6 +114,14 @@
   <div class="row">
     <button id="edit">Edit names</button>
     <button id="clear">Clear who is here</button>
+  </div>
+  <div class="row">
+    <button id="newsun" class="go">Start a new Sunday</button>
+  </div>
+
+  <div id="pastwrap" style="display:none">
+    <h2>Sundays before <span class="c" id="pastCount"></span></h2>
+    <div id="past"></div>
   </div>
   <div class="row">
     <button id="print">Print</button>
@@ -137,8 +154,8 @@
   var KEY = 'yam-sheet-' + SHEET;
 
   var DEFAULT = {
-    rosterV: 3,
-    when: "Sunday morning, September 21",
+    rosterV: 4,
+    when: "Sunday morning, September 27",
     men: ["Daniel", "Ryan", "Andrew", "Paul", "Elder Bro B"],
     jobs: [
       { lbl:"Pre prayer",   who:"Paul" },
@@ -156,7 +173,7 @@
      NOT pick up new defaults. v4.0 is the first real roster, so a sheet written
      before it gets the men and the young men installed once, and the four jobs
      renamed onto the real names. rosterV stops it happening twice. */
-  var ROSTER_V = 3;   // v2 wrongly REPLACED Matthew, Luke and Josiah
+  var ROSTER_V = 4;   // v2 wrongly REPLACED three names; v4 fixes a wrong date
   var RENAME = { "Bro Paul":"Paul", "Bro Daniel":"Daniel", "Bro Drew":"Andrew",
                  "The worship crew":"" };
 
@@ -164,6 +181,7 @@
     if (!d) return d;
     if (!d.kids) d.kids = [];
     if (!d.men)  d.men  = [];
+    if (!d.past) d.past = [];
     if (d.rosterV !== ROSTER_V){
       // ⚠️ ADD what is missing. v2 replaced the list outright and lost three
       // names he had already given me. A tick already on the sheet survives.
@@ -172,6 +190,8 @@
         var has = d.kids.some(function(x){ return x.name === k.name; });
         if (!has) d.kids.push({ name:k.name, here:false });
       });
+      // 🔴 the sheet shipped saying September 21, which is a MONDAY in 2026
+      if (d.when === 'Sunday morning, September 21') d.when = 'Sunday morning, September 27';
       (d.jobs || []).forEach(function(j){
         if (Object.prototype.hasOwnProperty.call(RENAME, j.who)) j.who = RENAME[j.who];
       });
@@ -389,17 +409,89 @@
     kidsEl.appendChild(add);
   }
 
-  function drawAll(){ drawJobs(); drawMen(); drawKids(); counts(); }
+  function drawAll(){ drawJobs(); drawMen(); drawKids(); drawPast(); counts(); }
 
   when.value = data.when;
   when.addEventListener('input', save);
-  drawAll();
 
   document.getElementById('edit').addEventListener('click', function(){
     var on = document.body.classList.toggle('editing');
     this.classList.toggle('on', on);
     this.textContent = on ? 'Done editing' : 'Edit names';
   });
+
+  /* ---------- a new Sunday ----------
+     The date it picks is the NEXT Sunday: today if today is Sunday, otherwise
+     the one coming. Started on a Saturday night, it says tomorrow. */
+  var MONTHS = ['January','February','March','April','May','June','July',
+                'August','September','October','November','December'];
+  function nextSunday(from){
+    var now = from ? new Date(from) : new Date();
+    var d = new Date(now); d.setHours(0,0,0,0);
+    var wd = d.getDay();                       // 0 is Sunday
+    // His rule: started on a SUNDAY MORNING it means today. But tapping it on
+    // Sunday afternoon is the far more likely move, filing away the service
+    // that just finished, and that must roll on to the next one rather than
+    // hand back the day we are standing in.
+    if (wd === 0 && now.getHours() >= 12) d.setDate(d.getDate() + 7);
+    else if (wd !== 0) d.setDate(d.getDate() + (7 - wd));
+    return 'Sunday morning, ' + MONTHS[d.getMonth()] + ' ' + d.getDate();
+  }
+
+  function fileItAway(){
+    var here = data.kids.filter(function(k){ return k.here; }).map(function(k){ return k.name; });
+    return {
+      when: data.when,
+      jobs: data.jobs.map(function(j){ return { lbl:j.lbl, who:j.who }; }),
+      here: here,
+      of: data.kids.length,
+      savedAt: Date.now()
+    };
+  }
+
+  document.getElementById('newsun').addEventListener('click', function(){
+    var nxt = nextSunday();
+    var anything = data.kids.some(function(k){ return k.here; }) ||
+                   data.jobs.some(function(j){ return j.who.trim(); });
+    if (anything){
+      if (!data.past) data.past = [];
+      data.past.unshift(fileItAway());
+      data.past = data.past.slice(0, 40);      // the blob stays small
+    }
+    // A new Sunday genuinely has nobody on it yet, so the jobs go back to open
+    // and the header's "4 still open" means something real again. Last time is
+    // kept below, so nothing is lost by blanking them.
+    data.jobs.forEach(function(j){ j.who = ''; });
+    data.kids.forEach(function(k){ k.here = false; });
+    data.when = nxt;
+    when.value = nxt;
+    save(); drawAll();
+    toast(anything ? 'Filed away' : nxt.replace('Sunday morning, ', ''));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  function drawPast(){
+    var wrap = document.getElementById('pastwrap'), box = document.getElementById('past');
+    var list = data.past || [];
+    wrap.style.display = list.length ? 'block' : 'none';
+    document.getElementById('pastCount').textContent =
+      list.length ? list.length + (list.length === 1 ? ' kept' : ' kept') : '';
+    box.innerHTML = '';
+    list.forEach(function(p, i){
+      var d = document.createElement('div'); d.className = 'p';
+      var b = document.createElement('button');
+      b.innerHTML = '<span class="pd">' + esc((p.when || '').replace('Sunday morning, ', '')) +
+        '</span><span class="pc">' + p.here.length + ' of ' + p.of + ' here</span>';
+      var body = document.createElement('div'); body.className = 'body';
+      var lines = (p.jobs || []).map(function(j){
+        return esc(j.lbl || '?') + ': <b>' + esc(j.who || 'nobody') + '</b>';
+      });
+      lines.push('Here: <b>' + (p.here.length ? esc(p.here.join(', ')) : 'nobody was ticked') + '</b>');
+      body.innerHTML = lines.join('<br>');
+      b.addEventListener('click', function(){ d.classList.toggle('open'); });
+      d.appendChild(b); d.appendChild(body); box.appendChild(d);
+    });
+  }
 
   document.getElementById('clear').addEventListener('click', function(){
     data.kids.forEach(function(k){ k.here = false; });
@@ -426,6 +518,8 @@
     t.textContent = m; t.classList.add('on');
     setTimeout(function(){ t.classList.remove('on'); }, 1700);
   }
+
+  drawAll();
 
   /* pull on open, when the phone comes back, and every 20s while it is up */
   pull();
