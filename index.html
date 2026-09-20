@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v3.3">
+<meta name="x-yam-version" content="v4.1">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -22,33 +22,41 @@
      margin:30px 0 12px; display:flex; align-items:center; gap:10px}
   h2 .c{margin-left:auto; color:var(--dim); letter-spacing:.04em; text-transform:none; font-size:13px; font-weight:600}
 
-  /* adults */
-  .job{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:11px 14px; margin:0 0 9px;
-       display:flex; align-items:center; gap:12px}
-  .job .lbl{flex:0 0 108px; font-size:13px; color:var(--dim); letter-spacing:.02em}
-  .job .lbl input{width:100%; background:none; border:0; color:var(--dim); font:inherit; padding:2px 0}
-  .job .nm{flex:1; min-width:0}
-  .job .nm input{width:100%; background:none; border:0; color:var(--ink); font:inherit; font-size:17px;
-    font-weight:600; padding:2px 0}
-  .job input:focus{outline:0}
-  .job input::placeholder{color:#6b5e4b; font-weight:400}
+  /* a job: what it is, and a tap to pick who has it */
+  .job{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px 8px 10px 14px;
+       margin:0 0 9px; display:flex; align-items:center; gap:10px}
+  .job .lbl{flex:0 0 104px}
+  .job .lbl input{width:100%; background:none; border:0; color:var(--dim); font:inherit; font-size:13px; padding:2px 0}
+  .job .lbl input:focus{outline:0; color:var(--ink)}
+  .job .pickwrap{flex:1; min-width:0; position:relative}
+  .job select{width:100%; -webkit-appearance:none; appearance:none; background:transparent; border:0;
+    color:var(--ink); font:inherit; font-size:17px; font-weight:600; padding:8px 26px 8px 8px; border-radius:10px;
+    cursor:pointer}
+  .job select:focus{outline:0}
+  .job select.none{color:#6b5e4b; font-weight:400}
+  .job .chev{position:absolute; right:9px; top:50%; transform:translateY(-50%); color:var(--gold);
+    font-size:12px; pointer-events:none; opacity:.8}
   .job.filled{border-color:#4a3616}
+  .job.filled select{background:#241c13}
   .kill{background:none; border:0; color:#6b5e4b; font-size:19px; line-height:1; padding:2px 3px; cursor:pointer;
     display:none}
   body.editing .kill{display:block}
 
-  /* kids */
-  .kids{display:flex; flex-wrap:wrap; gap:9px}
-  .kid{background:var(--card); border:1px solid var(--line); color:var(--ink); border-radius:999px;
+  /* chips: the kids, and the men when editing */
+  .chips{display:flex; flex-wrap:wrap; gap:9px}
+  .chip{background:var(--card); border:1px solid var(--line); color:var(--ink); border-radius:999px;
     padding:11px 17px; font-size:16px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px}
-  .kid .dot{width:9px; height:9px; border-radius:50%; background:#3b3025}
-  .kid.here{background:var(--gold); border-color:var(--gold); color:#171009}
-  .kid.here .dot{background:#171009}
-  .kid:active{opacity:.75}
-  .kid .x{color:inherit; opacity:.55; font-size:17px; margin-left:2px; display:none}
-  body.editing .kid .x{display:inline}
-  .addkid{background:none; border:1px dashed var(--line); color:var(--dim); border-radius:999px;
+  .chip .dot{width:9px; height:9px; border-radius:50%; background:#3b3025}
+  .chip.here{background:var(--gold); border-color:var(--gold); color:#171009}
+  .chip.here .dot{background:#171009}
+  .chip:active{opacity:.75}
+  .chip .x{color:inherit; opacity:.55; font-size:17px; margin-left:2px; display:none}
+  body.editing .chip .x{display:inline}
+  .add{background:none; border:1px dashed var(--line); color:var(--dim); border-radius:999px;
     padding:11px 17px; font-size:16px; cursor:pointer}
+  .men{display:none; margin-top:10px}
+  body.editing .men{display:block}
+  .men .lead{color:#7c6e59; font-size:13px; margin:0 2px 9px}
   .empty{color:#7c6e59; font-size:14px; line-height:1.55; margin:0 2px}
 
   .row{display:flex; gap:9px; margin-top:22px; flex-wrap:wrap}
@@ -65,10 +73,11 @@
   footer{text-align:center; color:#5e5344; font-size:12px; padding:28px 0 0}
   @media print{
     html,body{background:#fff; color:#000}
-    .job,.kid{border:1px solid #bbb; background:#fff!important; color:#000!important}
-    .kid:not(.here){opacity:.35}
-    .job .lbl input{color:#555} .job .nm input{color:#000}
-    .row,.kill,.hint,footer,.toast,.addkid{display:none!important}
+    .job,.chip{border:1px solid #bbb; background:#fff!important; color:#000!important}
+    .job select{color:#000; background:#fff}
+    .chip:not(.here){opacity:.35}
+    .job .lbl input{color:#555}
+    .row,.kill,.hint,footer,.toast,.add,.men,.chev{display:none!important}
     h2{color:#000}
   }
 </style>
@@ -83,9 +92,13 @@
 
   <h2>The men <span class="c" id="jobsLeft"></span></h2>
   <div id="jobs"></div>
+  <div class="men">
+    <p class="lead">The men in the picker. Take one off or add one.</p>
+    <div class="chips" id="men"></div>
+  </div>
 
   <h2>Who is here <span class="c" id="count"></span></h2>
-  <div class="kids" id="kids"></div>
+  <div class="chips" id="kids"></div>
   <p class="empty" id="empty">Add the young men once and they stay on here. Tap a name Sunday
      morning and it turns gold.</p>
 
@@ -124,26 +137,52 @@
   var KEY = 'yam-sheet-' + SHEET;
 
   var DEFAULT = {
+    rosterV: 2,
     when: "Sunday morning, September 21",
+    men: ["Daniel", "Ryan", "Andrew", "Paul", "Elder Bro B"],
     jobs: [
-      { lbl:"Pre prayer",   who:"Bro Paul" },
-      { lbl:"Worship",      who:"The worship crew" },
-      { lbl:"Lesson",       who:"Bro Daniel" },
-      { lbl:"After lesson", who:"Bro Drew" }
+      { lbl:"Pre prayer",   who:"Paul" },
+      { lbl:"Worship",      who:"" },
+      { lbl:"Lesson",       who:"Daniel" },
+      { lbl:"After lesson", who:"Andrew" }
     ],
     kids: [
-      { name:"Matthew", here:false },
-      { name:"Luke",    here:false },
-      { name:"Josiah",  here:false }
-    ]
+      "Tristen", "Caleb C", "Josh C", "Darius L", "Mica L",
+      "Judah L", "Alex S", "Jorda S", "Jonah H"
+    ].map(function(n){ return { name:n, here:false }; })
   };
+
+  /* A sheet already saved on a phone, or already sitting on the backend, does
+     NOT pick up new defaults. v4.0 is the first real roster, so a sheet written
+     before it gets the men and the young men installed once, and the four jobs
+     renamed onto the real names. rosterV stops it happening twice. */
+  var ROSTER_V = 2;
+  var RENAME = { "Bro Paul":"Paul", "Bro Daniel":"Daniel", "Bro Drew":"Andrew",
+                 "The worship crew":"" };
+
+  function migrate(d){
+    if (!d) return d;
+    if (!d.kids) d.kids = [];
+    if (!d.men)  d.men  = [];
+    if (d.rosterV !== ROSTER_V){
+      d.men  = DEFAULT.men.slice();
+      d.kids = DEFAULT.kids.map(function(k){ return { name:k.name, here:false }; });
+      (d.jobs || []).forEach(function(j){
+        if (Object.prototype.hasOwnProperty.call(RENAME, j.who)) j.who = RENAME[j.who];
+      });
+      d.rosterV = ROSTER_V;
+    }
+    return d;
+  }
 
   var data;
   try { data = JSON.parse(localStorage.getItem(KEY)) || null; } catch(e){ data = null; }
   if (!data || !data.jobs) data = JSON.parse(JSON.stringify(DEFAULT));
-  if (!data.kids) data.kids = [];
+  migrate(data);
+  if (!data.stamp) data.stamp = 0;
 
   var jobsEl = document.getElementById('jobs'),
+      menEl  = document.getElementById('men'),
       kidsEl = document.getElementById('kids'),
       when   = document.getElementById('when');
 
@@ -151,11 +190,8 @@
      The phone is the source of truth while you are stood in the room with no
      signal. Every change stamps data.stamp and is pushed to the backend a
      moment later, last write wins, so the other phones see the same sheet. */
-  var API = 'https://api.jobhubgo.com/api/yam/',
+  var API   = 'https://api.jobhubgo.com/api/yam/',
       pushT = null, pushing = false, lastTouch = 0;
-
-
-  if (!data.stamp) data.stamp = 0;
 
   function syncSay(m){ document.getElementById('sync').textContent = m; }
 
@@ -189,23 +225,23 @@
   /* Never take a server copy out from under a thumb that is mid word. */
   function busy(){
     var a = document.activeElement;
-    return (a && a.tagName === 'INPUT') || (Date.now() - lastTouch < 3000);
+    return (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT')) || (Date.now() - lastTouch < 3000);
   }
 
   function adopt(d, stamp){
     if (!d || !d.jobs) return;
     d.stamp = Number(stamp) || d.stamp || 0;
-    if (!d.kids) d.kids = [];
+    migrate(d);
     data = d;
     localStorage.setItem(KEY, JSON.stringify(data));
     when.value = data.when || '';
-    drawJobs(); drawKids(); counts();
+    drawAll();
     syncSay('up to date');
   }
 
   function pull(){
     fetch(API + SHEET).then(function(r){ return r.json(); }).then(function(j){
-      if (!j || !j.data) {                       // nothing up there yet, seed it
+      if (!j || !j.data) {
         if (data.stamp === 0) data.stamp = Date.now();
         push(); return;
       }
@@ -214,12 +250,13 @@
     }).catch(function(){ syncSay('saved on this phone'); });
   }
 
+  /* ---------- drawing ---------- */
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
   function counts(){
-    var took = data.jobs.filter(function(j){ return j.who.trim(); }).length,
-        open = data.jobs.length - took,
+    var open = data.jobs.filter(function(j){ return !j.who.trim(); }).length,
         here = data.kids.filter(function(k){ return k.here; }).length;
-    document.getElementById('jobsLeft').textContent =
-      open === 0 ? 'all covered' : open + (open === 1 ? ' still open' : ' still open');
+    document.getElementById('jobsLeft').textContent = open === 0 ? 'all covered' : open + ' still open';
     document.getElementById('count').textContent =
       data.kids.length ? here + ' of ' + data.kids.length : '';
     document.getElementById('empty').style.display = data.kids.length ? 'none' : 'block';
@@ -236,64 +273,122 @@
       li.addEventListener('input', function(){ j.lbl = li.value; save(); });
       l.appendChild(li);
 
-      var n = document.createElement('span'); n.className = 'nm';
-      var ni = document.createElement('input'); ni.value = j.who; ni.placeholder = 'nobody yet';
-      ni.addEventListener('input', function(){
-        j.who = ni.value; d.classList.toggle('filled', !!ni.value.trim()); save(); counts();
+      /* A plain <select> on purpose: iOS gives it the big wheel picker, so it
+         is one tap and a spin, no keyboard and nothing to spell. */
+      var w = document.createElement('span'); w.className = 'pickwrap';
+      var sel = document.createElement('select');
+      function fill(){
+        sel.innerHTML = '';
+        var names = data.men.slice();
+        // a name assigned before it was taken off the list must not vanish
+        if (j.who.trim() && names.indexOf(j.who) === -1) names.push(j.who);
+        var o0 = document.createElement('option');
+        o0.value = ''; o0.textContent = 'nobody yet';
+        sel.appendChild(o0);
+        names.forEach(function(n){
+          var o = document.createElement('option');
+          o.value = n; o.textContent = n;
+          sel.appendChild(o);
+        });
+        var oa = document.createElement('option');
+        oa.value = '__add'; oa.textContent = '+ Someone else…';
+        sel.appendChild(oa);
+        sel.value = j.who || '';
+        sel.className = j.who.trim() ? '' : 'none';
+      }
+      fill();
+      sel.addEventListener('change', function(){
+        if (sel.value === '__add'){
+          var n = (window.prompt('Name') || '').trim();
+          if (n){
+            if (data.men.indexOf(n) === -1) data.men.push(n);
+            j.who = n;
+          }
+          save(); drawAll(); return;
+        }
+        j.who = sel.value;
+        d.classList.toggle('filled', !!j.who.trim());
+        sel.className = j.who.trim() ? '' : 'none';
+        save(); counts();
       });
-      n.appendChild(ni);
+      var ch = document.createElement('span'); ch.className = 'chev'; ch.textContent = '▼';
+      w.appendChild(sel); w.appendChild(ch);
 
       var k = document.createElement('button');
       k.className = 'kill'; k.textContent = '×';
-      k.addEventListener('click', function(){ data.jobs.splice(i,1); save(); drawJobs(); counts(); });
+      k.addEventListener('click', function(){ data.jobs.splice(i,1); save(); drawAll(); });
 
-      d.appendChild(l); d.appendChild(n); d.appendChild(k);
+      d.appendChild(l); d.appendChild(w); d.appendChild(k);
       jobsEl.appendChild(d);
     });
 
     var add = document.createElement('button');
-    add.className = 'addkid'; add.textContent = '+ Another job';
-    add.style.marginTop = '2px';
+    add.className = 'add'; add.textContent = '+ Another job'; add.style.marginTop = '2px';
     add.addEventListener('click', function(){
-      data.jobs.push({ lbl:'', who:'' }); save(); drawJobs(); counts();
+      data.jobs.push({ lbl:'', who:'' }); save(); drawAll();
       var ins = jobsEl.querySelectorAll('.job:last-of-type input');
       if (ins.length) ins[0].focus();
     });
     jobsEl.appendChild(add);
   }
 
+  function drawMen(){
+    menEl.innerHTML = '';
+    data.men.forEach(function(n, i){
+      var b = document.createElement('button');
+      b.className = 'chip';
+      b.innerHTML = esc(n) + '<span class="x" style="display:inline">×</span>';
+      b.addEventListener('click', function(){
+        data.men.splice(i, 1); save(); drawAll();
+      });
+      menEl.appendChild(b);
+    });
+    var add = document.createElement('button');
+    add.className = 'add'; add.textContent = '+ Add a man';
+    add.addEventListener('click', function(){
+      var n = window.prompt('Name');
+      if (!n) return;
+      n.split(',').forEach(function(one){
+        one = one.trim();
+        if (one && data.men.indexOf(one) === -1) data.men.push(one);
+      });
+      save(); drawAll();
+    });
+    menEl.appendChild(add);
+  }
+
   function drawKids(){
     kidsEl.innerHTML = '';
     data.kids.forEach(function(k, i){
       var b = document.createElement('button');
-      b.className = 'kid' + (k.here ? ' here' : '');
+      b.className = 'chip' + (k.here ? ' here' : '');
       b.innerHTML = '<span class="dot"></span>' + esc(k.name) + '<span class="x">×</span>';
-      b.addEventListener('click', function(ev){
+      b.addEventListener('click', function(){
         if (document.body.classList.contains('editing')){
-          data.kids.splice(i,1); save(); drawKids(); counts(); return;
+          data.kids.splice(i,1); save(); drawAll(); return;
         }
-        k.here = !k.here; save(); drawKids(); counts();
+        k.here = !k.here; save(); drawAll();
       });
       kidsEl.appendChild(b);
     });
     var add = document.createElement('button');
-    add.className = 'addkid'; add.textContent = '+ Add a name';
+    add.className = 'add'; add.textContent = '+ Add a name';
     add.addEventListener('click', function(){
       var n = window.prompt('Name');
       if (!n) return;
       n.split(',').forEach(function(one){
         one = one.trim(); if (one) data.kids.push({ name:one, here:false });
       });
-      save(); drawKids(); counts();
+      save(); drawAll();
     });
     kidsEl.appendChild(add);
   }
 
-  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function drawAll(){ drawJobs(); drawMen(); drawKids(); counts(); }
 
   when.value = data.when;
   when.addEventListener('input', save);
-  drawJobs(); drawKids(); counts();
+  drawAll();
 
   document.getElementById('edit').addEventListener('click', function(){
     var on = document.body.classList.toggle('editing');
@@ -303,7 +398,7 @@
 
   document.getElementById('clear').addEventListener('click', function(){
     data.kids.forEach(function(k){ k.here = false; });
-    save(); drawKids(); counts(); toast('Cleared');
+    save(); drawAll(); toast('Cleared');
   });
 
   document.getElementById('print').addEventListener('click', function(){ window.print(); });
@@ -344,6 +439,4 @@
     window.prompt('Copy this', txt);
   });
 })();
-</script>
-</body>
-</html>
+</script></body></html>
