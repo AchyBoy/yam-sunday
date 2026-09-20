@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v5.4">
+<meta name="x-yam-version" content="v5.6">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -451,8 +451,15 @@
 
   document.getElementById('newsun').addEventListener('click', function(){
     var nxt = nextSunday();
-    var anything = data.kids.some(function(k){ return k.here; }) ||
-                   data.jobs.some(function(j){ return j.who.trim(); });
+    var anything = anythingOn();
+    // Tapped while the sheet is already sitting on the Sunday coming, the date
+    // does not move, so do not ask him a question that reads like a mistake.
+    var same = nxt === data.when;
+    if (anything && !window.confirm(
+        same
+          ? 'File ' + shortDate() + ' away and start it over?\n\nIt is kept under Sundays before.'
+          : 'File ' + shortDate() + ' away and start ' + nxt.replace('Sunday morning, ', '') +
+            '?\n\nIt is kept under Sundays before.')) return;
     if (anything){
       if (!data.past) data.past = [];
       data.past.unshift(fileItAway());
@@ -495,7 +502,17 @@
 
   /* Clear takes the men off their jobs as well as the ticks. Same reset as
      Start a new Sunday, minus the filing away and minus moving the date. */
+  function shortDate(){ return (data.when || 'this sheet').replace('Sunday morning, ', ''); }
+  function anythingOn(){
+    return data.kids.some(function(k){ return k.here; }) ||
+           data.jobs.some(function(j){ return j.who.trim(); });
+  }
+
   document.getElementById('clear').addEventListener('click', function(){
+    // Clear does NOT keep a copy, so it always asks. An empty sheet just goes.
+    if (anythingOn() && !window.confirm(
+        'Clear ' + shortDate() + '?\n\nThe men come off their jobs and everybody ' +
+        'ticked goes grey. This one is not kept.')) return;
     data.jobs.forEach(function(j){ j.who = ''; });
     data.kids.forEach(function(k){ k.here = false; });
     save(); drawAll(); toast('Cleared');
