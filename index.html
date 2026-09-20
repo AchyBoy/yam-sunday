@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v4.1">
+<meta name="x-yam-version" content="v4.2">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -137,7 +137,7 @@
   var KEY = 'yam-sheet-' + SHEET;
 
   var DEFAULT = {
-    rosterV: 2,
+    rosterV: 3,
     when: "Sunday morning, September 21",
     men: ["Daniel", "Ryan", "Andrew", "Paul", "Elder Bro B"],
     jobs: [
@@ -147,8 +147,8 @@
       { lbl:"After lesson", who:"Andrew" }
     ],
     kids: [
-      "Tristen", "Caleb C", "Josh C", "Darius L", "Mica L",
-      "Judah L", "Alex S", "Jorda S", "Jonah H"
+      "Tristen", "Caleb C", "Josh C", "Darius L", "Mica L", "Judah L",
+      "Alex S", "Jorda S", "Jonah H", "Matthew", "Luke", "Josiah"
     ].map(function(n){ return { name:n, here:false }; })
   };
 
@@ -156,7 +156,7 @@
      NOT pick up new defaults. v4.0 is the first real roster, so a sheet written
      before it gets the men and the young men installed once, and the four jobs
      renamed onto the real names. rosterV stops it happening twice. */
-  var ROSTER_V = 2;
+  var ROSTER_V = 3;   // v2 wrongly REPLACED Matthew, Luke and Josiah
   var RENAME = { "Bro Paul":"Paul", "Bro Daniel":"Daniel", "Bro Drew":"Andrew",
                  "The worship crew":"" };
 
@@ -165,8 +165,13 @@
     if (!d.kids) d.kids = [];
     if (!d.men)  d.men  = [];
     if (d.rosterV !== ROSTER_V){
-      d.men  = DEFAULT.men.slice();
-      d.kids = DEFAULT.kids.map(function(k){ return { name:k.name, here:false }; });
+      // ⚠️ ADD what is missing. v2 replaced the list outright and lost three
+      // names he had already given me. A tick already on the sheet survives.
+      DEFAULT.men.forEach(function(n){ if (d.men.indexOf(n) === -1) d.men.push(n); });
+      DEFAULT.kids.forEach(function(k){
+        var has = d.kids.some(function(x){ return x.name === k.name; });
+        if (!has) d.kids.push({ name:k.name, here:false });
+      });
       (d.jobs || []).forEach(function(j){
         if (Object.prototype.hasOwnProperty.call(RENAME, j.who)) j.who = RENAME[j.who];
       });
