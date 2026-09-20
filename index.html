@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v3.2">
+<meta name="x-yam-version" content="v3.3">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -109,15 +109,33 @@
   document.getElementById('ver').textContent =
     document.querySelector('meta[name=x-yam-version]').content;
 
+  /* The sheet key rides in the link, because this page is on the open web and
+     the list is boys' first names. No key in the URL means a brand new empty
+     sheet, so a stranger who finds the page sees nothing of ours. Whoever has
+     the link has the sheet, same as a shared document. */
+  var SHEET = (function(){
+    var m = /[#&?]s=([a-z0-9]{4,24})/i.exec(location.hash + location.search);
+    var k = m ? m[1].toLowerCase() : (localStorage.getItem('yam-key') || '');
+    if (!k) k = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+    localStorage.setItem('yam-key', k);
+    try { history.replaceState(null, '', location.pathname + '#s=' + k); } catch(e){}
+    return k;
+  })();
+  var KEY = 'yam-sheet-' + SHEET;
+
   var DEFAULT = {
     when: "Sunday morning, September 21",
     jobs: [
-      { lbl:"Pre prayer",   who:"" },
-      { lbl:"Worship",      who:"" },
-      { lbl:"Lesson",       who:"" },
-      { lbl:"After lesson", who:"" }
+      { lbl:"Pre prayer",   who:"Bro Paul" },
+      { lbl:"Worship",      who:"The worship crew" },
+      { lbl:"Lesson",       who:"Bro Daniel" },
+      { lbl:"After lesson", who:"Bro Drew" }
     ],
-    kids: []
+    kids: [
+      { name:"Matthew", here:false },
+      { name:"Luke",    here:false },
+      { name:"Josiah",  here:false }
+    ]
   };
 
   var data;
@@ -136,19 +154,6 @@
   var API = 'https://api.jobhubgo.com/api/yam/',
       pushT = null, pushing = false, lastTouch = 0;
 
-  /* The sheet key rides in the link, because this page is on the open web and
-     the list is boys' first names. No key in the URL means a brand new empty
-     sheet, so a stranger who finds the page sees nothing of ours. Whoever has
-     the link has the sheet, same as a shared document. */
-  var SHEET = (function(){
-    var m = /[#&?]s=([a-z0-9]{4,24})/i.exec(location.hash + location.search);
-    var k = m ? m[1].toLowerCase() : (localStorage.getItem('yam-key') || '');
-    if (!k) k = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
-    localStorage.setItem('yam-key', k);
-    try { history.replaceState(null, '', location.pathname + '#s=' + k); } catch(e){}
-    return k;
-  })();
-  var KEY = 'yam-sheet-' + SHEET;
 
   if (!data.stamp) data.stamp = 0;
 
