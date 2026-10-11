@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v5.6">
+<meta name="x-yam-version" content="v5.7">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -518,7 +518,78 @@
     save(); drawAll(); toast('Cleared');
   });
 
-  document.getElementById('print').addEventListener('click', function(){ window.print(); });
+  /* 🔴 Print did nothing on his phone (10-11): opened from his links page, the
+     sheet sits in the in-app browser, and iPhone ignores window.print() there
+     (and in Home Screen apps). So try the real print; if the print menu has not
+     opened within a moment, offer the sheet as a PICTURE, whose share sheet
+     always has Print. */
+  document.getElementById('print').addEventListener('click', function(){
+    var opened = false, on = function(){ opened = true; };
+    window.addEventListener('beforeprint', on);
+    try { window.print(); } catch(e){}
+    setTimeout(function(){
+      window.removeEventListener('beforeprint', on);
+      if (!opened) printHelp();
+    }, 700);
+  });
+
+  function sheetPicture(cb){
+    var W = 1100, pad = 70, lh = 58, here = data.kids.filter(function(k){ return k.here; }),
+        away = data.kids.filter(function(k){ return !k.here; });
+    var H = pad * 2 + 150 + data.jobs.length * lh + 90 + Math.max(1, here.length) * lh + (away.length ? 90 + away.length * 48 : 0);
+    var c = document.createElement('canvas'); c.width = W; c.height = H;
+    var g = c.getContext('2d'), y = pad;
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#8a6a1f'; g.font = '700 30px -apple-system, Helvetica, Arial'; g.fillText('YOUNG ADULT MEN', pad, y + 26);
+    g.fillStyle = '#000'; g.font = '700 56px Georgia, serif'; g.fillText('Who has what', pad, y + 96);
+    g.fillStyle = '#555'; g.font = '32px -apple-system, Helvetica, Arial'; g.fillText(when.value || '', pad, y + 142);
+    y += 200;
+    data.jobs.forEach(function(j){
+      g.fillStyle = '#555'; g.font = '34px -apple-system, Helvetica, Arial'; g.fillText((j.lbl || '?') + ':', pad, y);
+      g.fillStyle = '#000'; g.font = '600 38px -apple-system, Helvetica, Arial'; g.fillText(j.who.trim() || 'still open', pad + 330, y);
+      y += lh;
+    });
+    y += 40;
+    g.fillStyle = '#8a6a1f'; g.font = '700 30px -apple-system, Helvetica, Arial';
+    g.fillText('HERE, ' + here.length + ' OF ' + data.kids.length, pad, y); y += lh;
+    g.fillStyle = '#000'; g.font = '600 38px -apple-system, Helvetica, Arial';
+    (here.length ? here : [{ name:'Nobody ticked yet' }]).forEach(function(k){ g.fillText(k.name, pad, y); y += lh; });
+    if (away.length) {
+      y += 30; g.fillStyle = '#999'; g.font = '700 26px -apple-system, Helvetica, Arial'; g.fillText('NOT HERE', pad, y); y += 48;
+      g.font = '32px -apple-system, Helvetica, Arial';
+      away.forEach(function(k){ g.fillText(k.name, pad, y); y += 48; });
+    }
+    c.toBlob(cb, 'image/png');
+  }
+
+  function printHelp(){
+    var bg = document.createElement('div');
+    bg.style.cssText = 'position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center';
+    bg.innerHTML = '<div style="background:#1c1713;border:1px solid #2e251c;border-radius:18px 18px 0 0;padding:20px 18px calc(env(safe-area-inset-bottom) + 20px);max-width:560px;width:100%;color:#f6efe3">' +
+      '<div style="font-size:18px;font-weight:700;margin-bottom:6px">This screen won\'t open Print</div>' +
+      '<div style="color:#b9aa92;font-size:15px;line-height:1.45;margin-bottom:16px">It opened inside another app, and iPhone blocks printing there. ' +
+      'Make a picture of the sheet instead, then pick <b style="color:#f6efe3">Print</b> in the menu that comes up.</div>' +
+      '<button id="pAsPic" style="width:100%;border:0;border-radius:12px;padding:15px;font:inherit;font-size:16px;font-weight:700;background:#d8ab52;color:#120f0c">Print as a picture</button>' +
+      '<button id="pClose" style="width:100%;margin-top:9px;border:1px solid #2e251c;border-radius:12px;padding:13px;font:inherit;font-size:15px;background:none;color:#f6efe3">Close</button></div>';
+    document.body.appendChild(bg);
+    function close(){ if (bg.parentNode) bg.parentNode.removeChild(bg); }
+    bg.addEventListener('click', function(e){ if (e.target === bg) close(); });
+    document.getElementById('pClose').addEventListener('click', close);
+    // build the picture now, so the tap below can share it straight away
+    var file = null;
+    sheetPicture(function(blob){ file = new File([blob], 'YAM sheet.png', { type:'image/png' }); });
+    document.getElementById('pAsPic').addEventListener('click', function(){
+      if (!file) return;
+      if (navigator.canShare && navigator.canShare({ files:[file] })) {
+        navigator.share({ files:[file], title:'YAM sheet' }).catch(function(){});
+        close();
+      } else {
+        // no file sharing here: show the picture so it can be saved or printed
+        window.open(URL.createObjectURL(file), '_blank');
+        close();
+      }
+    });
+  }
 
   /* No link in the shared text: the men who get this are reading it, not
      tapping it, and the address ate four lines. Names go one to a line, a
