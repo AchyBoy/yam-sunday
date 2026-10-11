@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v5.7">
+<meta name="x-yam-version" content="v5.8">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -86,7 +86,7 @@
     .job select{color:#000; background:#fff}
     .chip:not(.here){opacity:.35}
     .job .lbl input{color:#555}
-    .row,.kill,.hint,footer,.toast,.add,.men,.chev{display:none!important}
+    .row,.kill,.hint,footer,.toast,.add,.men,.chev,.noprint{display:none!important}
     h2{color:#000}
   }
 </style>
@@ -529,7 +529,7 @@
     try { window.print(); } catch(e){}
     setTimeout(function(){
       window.removeEventListener('beforeprint', on);
-      if (!opened) printHelp();
+      if (!opened && printBlocked()) printHelp();
     }, 700);
   });
 
@@ -562,8 +562,19 @@
     c.toBlob(cb, 'image/png');
   }
 
+  /* Real Safari can hold print behind its own "blocked from automatically printing"
+     Allow box, so no beforeprint inside 700ms there is NOT a failure (10-11: the help
+     sheet popped over Allow and got printed onto the page). Only the places that
+     really block it get the picture offer: a Home Screen app, or an app's own browser. */
+  function printBlocked(){
+    var ua = navigator.userAgent;
+    return !!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) ||
+      !/Safari\//.test(ua) || /FBAN|FBAV|Instagram|GSA\/|Line\//.test(ua));
+  }
+
   function printHelp(){
     var bg = document.createElement('div');
+    bg.className = 'noprint';
     bg.style.cssText = 'position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center';
     bg.innerHTML = '<div style="background:#1c1713;border:1px solid #2e251c;border-radius:18px 18px 0 0;padding:20px 18px calc(env(safe-area-inset-bottom) + 20px);max-width:560px;width:100%;color:#f6efe3">' +
       '<div style="font-size:18px;font-weight:700;margin-bottom:6px">This screen won\'t open Print</div>' +
