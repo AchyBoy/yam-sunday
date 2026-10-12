@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v6.4">
+<meta name="x-yam-version" content="v6.5">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -14,9 +14,12 @@
   header{padding:34px 0 6px; text-align:center}
   .kicker{font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--gold); font-weight:700}
   h1{font-family:Georgia,"Times New Roman",serif; font-weight:400; font-size:clamp(28px,8.5vw,42px); margin:9px 0 4px}
-  .when input{background:none; border:0; color:var(--dim); font:inherit; font-size:16px; text-align:center;
-    width:100%; padding:4px}
-  .when input:focus{outline:0; color:var(--ink)}
+  /* the date: tap it and the phone's own calendar opens, today marked */
+  .when{display:flex; justify-content:center}
+  .when label{position:relative; display:inline-flex; align-items:center; gap:8px; color:var(--dim);
+    font-size:16px; padding:6px 12px; border:1px solid var(--line); border-radius:999px; cursor:pointer}
+  .when input[type=date]{position:absolute; inset:0; width:100%; height:100%; opacity:0; font-size:16px;
+    -webkit-appearance:none; appearance:none; border:0; cursor:pointer}
 
   h2{font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); font-weight:700;
      margin:30px 0 12px; display:flex; align-items:center; gap:10px}
@@ -143,7 +146,9 @@
   <header>
     <div class="kicker">Young Adult Men</div>
     <h1>Who has what</h1>
-    <div class="when"><input id="when" value="Sunday morning, September 27"></div>
+    <div class="when"><label><span id="whenTxt"></span><span>📅</span>
+      <input type="date" id="whenPick" aria-label="Pick the date"></label>
+      <input type="hidden" id="when" value="Sunday morning, September 27"></div>
   </header>
 
   <h2>The men <span class="c" id="jobsLeft"></span></h2>
@@ -610,7 +615,12 @@
     });
   }
 
-  function drawAll(){ drawJobs(); drawMen(); drawKids(); drawPast(); counts(); }
+  function drawAll(){
+    drawJobs(); drawMen(); drawKids(); drawPast(); counts();
+    document.getElementById('whenTxt').textContent = data.when || 'Pick a date';
+    var pk = document.getElementById('whenPick');
+    if (document.activeElement !== pk) pk.value = data.sunday || '';
+  }
 
   when.value = data.when;
   when.addEventListener('input', save);
@@ -652,7 +662,22 @@
     if (d.getDay() !== 0) d.setDate(d.getDate() + (7 - d.getDay()));
     return d;
   }
-  function whenFor(d){ return 'Sunday morning, ' + MONTHS[d.getMonth()] + ' ' + d.getDate(); }
+  var DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  function whenFor(d){
+    return (d.getDay() === 0 ? 'Sunday morning' : DAYS[d.getDay()]) + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate();
+  }
+
+  /* Picked by hand, the date is his: it relabels this sheet (ticks stay) and
+     the auto roll leaves it alone for the rest of today, so picking a date
+     that has already gone by does not file the sheet straight away. */
+  document.getElementById('whenPick').addEventListener('change', function(){
+    if (!this.value) return;
+    var d = fromYmd(this.value);
+    data.sunday = this.value; data.when = whenFor(d); data.pickedOn = ymd(new Date());
+    when.value = data.when;
+    this.blur();
+    save(); drawAll(); toast(data.when.replace('Sunday morning, ', 'Sunday, '));
+  });
   function fromYmd(s){ var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
 
   function rollOn(){
@@ -664,8 +689,9 @@
       var d0 = sundayFor(data.stamp || Date.now());
       data.sunday = ymd(d0); data.when = whenFor(d0); changed = true;
     }
-    var cur = sundayFor(Date.now());
-    if (data.sunday < ymd(cur)) {
+    var cur = sundayFor(Date.now()), today = ymd(new Date());
+    // past = the sheet's day is over. A date picked by hand today stays put.
+    if (data.sunday < today && data.pickedOn !== today) {
       if (!data.past) data.past = [];
       var done = data.past[0] && data.past[0].sunday === data.sunday;
       if (anythingOn() && !done) {
