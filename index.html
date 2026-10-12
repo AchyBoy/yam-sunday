@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v5.8">
+<meta name="x-yam-version" content="v5.9">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -490,9 +490,23 @@
     function links(){
       var h = '', ph = val('phone').replace(/[^0-9+]/g, ''), ad = val('addr').replace(/\s+/g, ' ');
       if (ph) h += '<a href="tel:' + ph + '">Call</a><a href="sms:' + ph + '">Text</a>';
-      if (ad) h += '<a target="_blank" href="https://maps.apple.com/?q=' + encodeURIComponent(ad) + '">Map it</a>';
+      if (ad) h += '<a target="_blank" href="' + mapUrl(ad) + '">Map it</a><a href="#" id="kShare">Share</a>';
       document.getElementById('kLinks').innerHTML = h;
+      var sh = document.getElementById('kShare');
+      if (sh) sh.addEventListener('click', function(e){
+        e.preventDefault();
+        // the address as he typed it, then a map link that opens on any phone
+        var a = val('addr'), txt = (val('name') || k.name) + '\n' + a + '\n' + mapUrl(a.replace(/\s+/g, ' '));
+        if (navigator.share){ navigator.share({ text: txt }).catch(function(){}); return; }
+        if (navigator.clipboard){
+          navigator.clipboard.writeText(txt).then(function(){ toast('Copied'); },
+            function(){ window.prompt('Copy this', txt); });
+          return;
+        }
+        window.prompt('Copy this', txt);
+      });
     }
+    function mapUrl(ad){ return 'https://maps.apple.com/?q=' + encodeURIComponent(ad); }
     links();
     bg.querySelector('[data-k="phone"]').addEventListener('input', links);
     bg.querySelector('[data-k="addr"]').addEventListener('input', links);
