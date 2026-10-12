@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v6.2">
+<meta name="x-yam-version" content="v6.3">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -119,6 +119,8 @@
   .p .body{display:none; padding:0 15px 14px; color:var(--dim); font-size:14px; line-height:1.6}
   .p.open .body{display:block}
   .p.open .pd{color:var(--gold)}
+  .p .psh{display:block; width:100%; margin-top:12px; background:var(--gold); border:0; color:#171009;
+    border-radius:10px; padding:11px; font:inherit; font-size:15px; font-weight:700; cursor:pointer}
   .p .body b{color:var(--ink); font-weight:600}
   footer{text-align:center; color:#5e5344; font-size:12px; padding:28px 0 0}
   @media print{
@@ -737,6 +739,9 @@
       });
       lines.push('Here: <b>' + (p.here.length ? esc(p.here.join(', ')) : 'nobody was ticked') + '</b>');
       body.innerHTML = lines.join('<br>');
+      var sh = document.createElement('button'); sh.className = 'psh'; sh.textContent = 'Share this Sunday';
+      sh.addEventListener('click', function(){ shareText(pastText(p)); });
+      body.appendChild(sh);
       b.addEventListener('click', function(){ d.classList.toggle('open'); });
       d.appendChild(b); d.appendChild(body); box.appendChild(d);
     });
@@ -836,6 +841,24 @@
   /* No link in the shared text: the men who get this are reading it, not
      tapping it, and the address ate four lines. Names go one to a line, a
      comma run of nine wrapped into a paragraph nobody could count. */
+  /* A Sundays before entry goes out in the same shape as today's sheet. */
+  function pastText(p){
+    var out = 'YAM · ' + (p.when || '') + '\n\n';
+    (p.jobs || []).forEach(function(j){ out += (j.lbl || '?') + ': ' + ((j.who || '').trim() || 'nobody') + '\n'; });
+    out += '\nHere, ' + p.here.length + ' of ' + p.of + ':\n';
+    out += p.here.length ? p.here.join('\n') + '\n' : 'nobody was ticked\n';
+    return out;
+  }
+  function shareText(txt){
+    if (navigator.share){ navigator.share({ title:'YAM, who has what', text: txt }).catch(function(){}); return; }
+    if (navigator.clipboard){
+      navigator.clipboard.writeText(txt).then(function(){ toast('Copied'); },
+        function(){ window.prompt('Copy this', txt); });
+      return;
+    }
+    window.prompt('Copy this', txt);
+  }
+
   function asText(){
     var out = 'YAM · ' + when.value + '\n\n';
     data.jobs.forEach(function(j){
@@ -866,14 +889,7 @@
   window.addEventListener('online', function(){ push(); });
 
   document.getElementById('share').addEventListener('click', function(){
-    var txt = asText();
-    if (navigator.share){ navigator.share({ title:'YAM, who has what', text: txt }).catch(function(){}); return; }
-    if (navigator.clipboard){
-      navigator.clipboard.writeText(txt).then(function(){ toast('Copied'); },
-        function(){ window.prompt('Copy this', txt); });
-      return;
-    }
-    window.prompt('Copy this', txt);
+    shareText(asText());
   });
 })();
 </script></body></html>
