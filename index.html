@@ -52,6 +52,45 @@
   .chip:active{opacity:.75}
   .chip .x{color:inherit; opacity:.55; font-size:17px; margin-left:2px; display:none}
   body.editing .chip .x{display:inline}
+  /* the young men: big tiles, because 90% of Sunday is tapping "here".
+     The pencil opens his details: phone, address, first visit, notes. */
+  .kids{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+  .kid{background:var(--card); border:1px solid var(--line); border-radius:14px; display:flex;
+    min-height:62px; overflow:hidden}
+  .kid .tap{flex:1; min-width:0; background:none; border:0; color:var(--ink); font:inherit; text-align:left;
+    padding:10px 6px 10px 13px; display:flex; align-items:center; gap:9px; cursor:pointer}
+  .kid .nm{font-size:17px; font-weight:600; line-height:1.2; overflow-wrap:anywhere}
+  .kid .sub{display:block; font-size:12px; font-weight:500; color:var(--dim); margin-top:2px}
+  .kid .dot{flex:0 0 11px; width:11px; height:11px; border-radius:50%; background:#3b3025}
+  .kid .pen{flex:0 0 46px; background:none; border:0; border-left:1px solid var(--line); font-size:17px;
+    cursor:pointer; padding:0}
+  .kid.here{background:var(--gold); border-color:var(--gold)}
+  .kid.here .tap{color:#171009}
+  .kid.here .sub{color:#4a3616}
+  .kid.here .dot{background:#171009}
+  .kid.here .pen{border-left-color:#b48a3c}
+  .kid .tap:active,.kid .pen:active{opacity:.6}
+  .kid .x{color:inherit; opacity:.55; font-size:19px; margin-left:auto; display:none}
+  body.editing .kid .x{display:inline}
+  body.editing .kid .pen{display:none}
+  .kids .add{border-radius:14px; min-height:62px}
+  .sheet{position:fixed; inset:0; z-index:99; background:rgba(0,0,0,.6); display:flex; align-items:flex-end;
+    justify-content:center}
+  .sheet .in{background:var(--card); border:1px solid var(--line); border-radius:18px 18px 0 0; width:100%;
+    max-width:560px; max-height:92vh; overflow:auto; padding:18px 18px calc(env(safe-area-inset-bottom) + 18px)}
+  .sheet label{display:block; color:var(--gold); font-size:11px; letter-spacing:.2em; text-transform:uppercase;
+    font-weight:700; margin:14px 2px 6px}
+  .sheet input,.sheet textarea{width:100%; background:#120f0c; border:1px solid var(--line); border-radius:10px;
+    color:var(--ink); font:inherit; font-size:16px; padding:11px 12px}
+  .sheet textarea{min-height:64px; resize:vertical}
+  .sheet .links{display:flex; gap:9px; margin-top:8px}
+  .sheet .links a{flex:1; text-align:center; text-decoration:none; color:var(--gold); border:1px solid var(--line);
+    border-radius:10px; padding:10px; font-size:15px; font-weight:600}
+  .sheet .btns{display:flex; gap:9px; margin-top:18px}
+  .sheet .btns button{flex:1; border-radius:12px; padding:14px 10px; font:inherit; font-size:15px; font-weight:700;
+    cursor:pointer; border:1px solid var(--line); background:none; color:var(--ink)}
+  .sheet .btns .go{background:var(--gold); border-color:var(--gold); color:#171009}
+  .sheet .btns .rm{color:#d9826b; flex:0 0 auto; padding:14px 16px}
   .add{background:none; border:1px dashed var(--line); color:var(--dim); border-radius:999px;
     padding:11px 17px; font-size:16px; cursor:pointer}
   .men{display:none; margin-top:10px}
@@ -85,8 +124,12 @@
     .job,.chip{border:1px solid #bbb; background:#fff!important; color:#000!important}
     .job select{color:#000; background:#fff}
     .chip:not(.here){opacity:.35}
+    .kid{border:1px solid #bbb; background:#fff!important}
+    .kid .tap{color:#000!important}
+    .kid:not(.here){opacity:.35}
+    .kid .pen,.kid .sub{display:none!important}
     .job .lbl input{color:#555}
-    .row,.kill,.hint,footer,.toast,.add,.men,.chev,.noprint{display:none!important}
+    .row,.kill,.hint,footer,.toast,.add,.men,.chev{display:none!important}
     h2{color:#000}
   }
 </style>
@@ -107,7 +150,7 @@
   </div>
 
   <h2>Who is here <span class="c" id="count"></span></h2>
-  <div class="chips" id="kids"></div>
+  <div class="kids" id="kids"></div>
   <p class="empty" id="empty">Add the young men once and they stay on here. Tap a name Sunday
      morning and it turns gold.</p>
 
@@ -250,11 +293,15 @@
   /* Never take a server copy out from under a thumb that is mid word. */
   function busy(){
     var a = document.activeElement;
-    return (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT')) || (Date.now() - lastTouch < 3000);
+    return (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT' || a.tagName === 'TEXTAREA')) ||
+      sheetOpen || (Date.now() - lastTouch < 3000);
   }
 
   function adopt(d, stamp){
     if (!d || !d.jobs) return;
+    // the details sheet holds a reference to one young man in THIS data, so a
+    // server copy waits until it is shut (the next pull brings it)
+    if (sheetOpen) return;
     d.stamp = Number(stamp) || d.stamp || 0;
     migrate(d);
     data = d;
@@ -385,16 +432,23 @@
   function drawKids(){
     kidsEl.innerHTML = '';
     data.kids.forEach(function(k, i){
-      var b = document.createElement('button');
-      b.className = 'chip' + (k.here ? ' here' : '');
-      b.innerHTML = '<span class="dot"></span>' + esc(k.name) + '<span class="x">×</span>';
+      var d = document.createElement('div');
+      d.className = 'kid' + (k.here ? ' here' : '');
+      var b = document.createElement('button'); b.className = 'tap';
+      b.innerHTML = '<span class="dot"></span><span class="nm">' + esc(k.name) +
+        (k.first ? '<span class="sub">first visit ' + esc(k.first) + '</span>' : '') +
+        '</span><span class="x">×</span>';
       b.addEventListener('click', function(){
         if (document.body.classList.contains('editing')){
           data.kids.splice(i,1); save(); drawAll(); return;
         }
         k.here = !k.here; save(); drawAll();
       });
-      kidsEl.appendChild(b);
+      var pen = document.createElement('button'); pen.className = 'pen';
+      pen.textContent = '✏️'; pen.setAttribute('aria-label', 'Details for ' + k.name);
+      pen.addEventListener('click', function(){ openKid(k); });
+      d.appendChild(b); d.appendChild(pen);
+      kidsEl.appendChild(d);
     });
     var add = document.createElement('button');
     add.className = 'add'; add.textContent = '+ Add a name';
@@ -407,6 +461,58 @@
       save(); drawAll();
     });
     kidsEl.appendChild(add);
+  }
+
+  /* ---------- one young man's details ----------
+     Kept on the same sheet blob, never in the shared text or the printout. */
+  var sheetOpen = false;
+  function openKid(k){
+    sheetOpen = true;
+    var bg = document.createElement('div'); bg.className = 'sheet';
+    function field(lbl, key, ph, area){
+      return '<label>' + lbl + '</label>' + (area
+        ? '<textarea data-k="' + key + '" placeholder="' + ph + '">' + esc(k[key] || '') + '</textarea>'
+        : '<input data-k="' + key + '" placeholder="' + ph + '" value="' + esc(k[key] || '').replace(/"/g,'&quot;') + '"' +
+          (key === 'phone' ? ' type="tel"' : '') + '>');
+    }
+    bg.innerHTML = '<div class="in">' +
+      field('Name', 'name', 'Name') +
+      field('Phone', 'phone', 'Phone number') +
+      field('Address', 'addr', 'Street, town', true) +
+      '<div class="links" id="kLinks"></div>' +
+      field('First visit', 'first', 'October 11') +
+      field('Notes', 'notes', 'Who brought him, anything to remember', true) +
+      '<div class="btns"><button class="rm" id="kRm">Remove</button>' +
+      '<button id="kX">Cancel</button><button class="go" id="kOk">Save</button></div></div>';
+    document.body.appendChild(bg);
+    var ins = bg.querySelectorAll('[data-k]');
+    function val(key){ return bg.querySelector('[data-k="' + key + '"]').value.trim(); }
+    function links(){
+      var h = '', ph = val('phone').replace(/[^0-9+]/g, ''), ad = val('addr').replace(/\s+/g, ' ');
+      if (ph) h += '<a href="tel:' + ph + '">Call</a><a href="sms:' + ph + '">Text</a>';
+      if (ad) h += '<a target="_blank" href="https://maps.apple.com/?q=' + encodeURIComponent(ad) + '">Map it</a>';
+      document.getElementById('kLinks').innerHTML = h;
+    }
+    links();
+    bg.querySelector('[data-k="phone"]').addEventListener('input', links);
+    bg.querySelector('[data-k="addr"]').addEventListener('input', links);
+    function close(){ sheetOpen = false; if (bg.parentNode) bg.parentNode.removeChild(bg); }
+    bg.addEventListener('click', function(e){ if (e.target === bg) close(); });
+    document.getElementById('kX').addEventListener('click', close);
+    document.getElementById('kOk').addEventListener('click', function(){
+      Array.prototype.forEach.call(ins, function(el){
+        var key = el.getAttribute('data-k'), v = el.value.trim();
+        if (key === 'name') { if (v) k.name = v; return; }
+        if (v) k[key] = v; else delete k[key];
+      });
+      close(); save(); drawAll(); toast('Saved');
+    });
+    document.getElementById('kRm').addEventListener('click', function(){
+      if (!window.confirm('Take ' + k.name + ' off the list?')) return;
+      var i = data.kids.indexOf(k);
+      if (i !== -1) data.kids.splice(i, 1);
+      close(); save(); drawAll();
+    });
   }
 
   function drawAll(){ drawJobs(); drawMen(); drawKids(); drawPast(); counts(); }
@@ -529,7 +635,7 @@
     try { window.print(); } catch(e){}
     setTimeout(function(){
       window.removeEventListener('beforeprint', on);
-      if (!opened && printBlocked()) printHelp();
+      if (!opened) printHelp();
     }, 700);
   });
 
@@ -562,19 +668,8 @@
     c.toBlob(cb, 'image/png');
   }
 
-  /* Real Safari can hold print behind its own "blocked from automatically printing"
-     Allow box, so no beforeprint inside 700ms there is NOT a failure (10-11: the help
-     sheet popped over Allow and got printed onto the page). Only the places that
-     really block it get the picture offer: a Home Screen app, or an app's own browser. */
-  function printBlocked(){
-    var ua = navigator.userAgent;
-    return !!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) ||
-      !/Safari\//.test(ua) || /FBAN|FBAV|Instagram|GSA\/|Line\//.test(ua));
-  }
-
   function printHelp(){
     var bg = document.createElement('div');
-    bg.className = 'noprint';
     bg.style.cssText = 'position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center';
     bg.innerHTML = '<div style="background:#1c1713;border:1px solid #2e251c;border-radius:18px 18px 0 0;padding:20px 18px calc(env(safe-area-inset-bottom) + 20px);max-width:560px;width:100%;color:#f6efe3">' +
       '<div style="font-size:18px;font-weight:700;margin-bottom:6px">This screen won\'t open Print</div>' +
