@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v6.5">
+<meta name="x-yam-version" content="v6.6">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -86,6 +86,9 @@
   .sheet input,.sheet textarea{width:100%; background:#120f0c; border:1px solid var(--line); border-radius:10px;
     color:var(--ink); font:inherit; font-size:16px; padding:11px 12px}
   .sheet textarea{min-height:64px; resize:vertical}
+  .sheet input[type=date]{color-scheme:dark; min-height:46px; -webkit-appearance:none; appearance:none; text-align:left}
+  .sheet .age{color:var(--ink); font-size:14px; line-height:1.5; margin:8px 2px 0}
+  .sheet .age:empty{display:none}
   .sheet .links{display:flex; gap:9px; margin-top:8px}
   .sheet .links a{flex:1; text-align:center; text-decoration:none; color:var(--gold); border:1px solid var(--line);
     border-radius:10px; padding:10px; font-size:15px; font-weight:600}
@@ -439,6 +442,20 @@
     menEl.appendChild(add);
   }
 
+  // under the name: age and birthday, a 🎂 when it is this week, and a
+  // warning once he is within 60 days of aging out
+  function tileSub(k){
+    var bits = [], a = ageInfo(k.bday);
+    if (a) {
+      bits.push((a.days <= 7 ? '🎂 ' : '') + a.age + ' · bday ' + a.md);
+      var left = Math.round((a.out - new Date().setHours(0,0,0,0)) / 864e5);
+      if (left <= 0) bits.push('aged out');
+      else if (left <= 60) bits.push('ages out in ' + left + (left === 1 ? ' day' : ' days'));
+    }
+    if (k.first) bits.push('first visit ' + k.first);
+    return bits.map(function(b){ return '<span class="sub">' + esc(b) + '</span>'; }).join('');
+  }
+
   function drawKids(){
     kidsEl.innerHTML = '';
     data.kids.forEach(function(k, i){
@@ -446,7 +463,7 @@
       d.className = 'kid' + (k.here ? ' here' : '');
       var b = document.createElement('button'); b.className = 'tap';
       b.innerHTML = '<span class="dot"></span><span class="nm">' + esc(k.name) +
-        (k.first ? '<span class="sub">first visit ' + esc(k.first) + '</span>' : '') +
+        tileSub(k) +
         '</span><span class="x">×</span>';
       b.addEventListener('click', function(){
         if (document.body.classList.contains('editing')){
@@ -501,6 +518,28 @@
     return out;
   }
 
+  /* Birthday: the class is 14 to 17, so what matters is how old he is, when
+     his birthday comes round, and the day he turns 18 and ages out. */
+  var MON3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function ageInfo(bday){
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(bday || '');
+    if (!m) return null;
+    var y = +m[1], mo = +m[2] - 1, d = +m[3], t = new Date(); t.setHours(0,0,0,0);
+    var age = t.getFullYear() - y;
+    var thisYr = new Date(t.getFullYear(), mo, d);
+    if (thisYr > t) age--;
+    var next = thisYr >= t ? thisYr : new Date(t.getFullYear() + 1, mo, d);
+    return { age: age, next: next, days: Math.round((next - t) / 864e5),
+             out: new Date(y + 18, mo, d), md: MON3[mo] + ' ' + d };
+  }
+  function ageLine(a){
+    if (!a) return '';
+    var nx = a.days === 0 ? 'Birthday is TODAY' : 'Birthday ' + a.md + ', in ' + a.days + (a.days === 1 ? ' day' : ' days');
+    var out = a.age >= 18 ? 'Aged out ' : 'Ages out ';
+    return 'Age ' + a.age + '. ' + nx + '.<br>' + out + MONTHS[a.out.getMonth()] + ' ' + a.out.getDate() + ', ' +
+      a.out.getFullYear() + ' (turns 18).';
+  }
+
   function openKid(k, isNew){
     sheetOpen = true;
     var bg = document.createElement('div'); bg.className = 'sheet';
@@ -508,7 +547,7 @@
       return '<label>' + lbl + '</label>' + (area
         ? '<textarea data-k="' + key + '" placeholder="' + ph + '">' + esc(k[key] || '') + '</textarea>'
         : '<input data-k="' + key + '" placeholder="' + ph + '" value="' + esc(k[key] || '').replace(/"/g,'&quot;') + '"' +
-          (key === 'phone' ? ' type="tel"' : '') + '>');
+          (key === 'phone' ? ' type="tel"' : key === 'bday' ? ' type="date"' : '') + '>');
     }
     bg.innerHTML = '<div class="in">' +
       '<label>Paste his info</label>' +
@@ -518,6 +557,8 @@
       field('Address', 'addr', 'Street, town', true) +
       '<div class="links" id="kLinks"></div>' +
       '<button class="share" id="kShare">Share contact</button>' +
+      field('Birthday', 'bday', '') +
+      '<div class="age" id="kAge"></div>' +
       field('First visit', 'first', 'October 11') +
       field('Notes', 'notes', 'Who brought him, anything to remember', true) +
       '<div class="btns"><button class="rm" id="kRm">Remove</button>' +
@@ -552,6 +593,7 @@
         v.push('ADR;TYPE=HOME:;;' + vc(street) + ';' + vc(city) + ';' + vc(st) + ';' + vc(zip) + ';');
         v.push('URL:' + mapUrl(ad.replace(/\s+/g, ' ')));
       }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(val('bday'))) v.push('BDAY:' + val('bday'));
       v.push('NOTE:' + vc('YAM' + (first ? ', first visit ' + first : '')));
       v.push('END:VCARD');
       return { name: nm, vcf: v.join('\r\n') + '\r\n',
@@ -572,6 +614,10 @@
       window.prompt('Copy this', c.text);
     });
     links();
+    function age(){ document.getElementById('kAge').innerHTML = ageLine(ageInfo(val('bday'))); }
+    age();
+    bg.querySelector('[data-k="bday"]').addEventListener('change', age);
+    bg.querySelector('[data-k="bday"]').addEventListener('input', age);
     bg.querySelector('[data-k="phone"]').addEventListener('input', links);
     bg.querySelector('[data-k="addr"]').addEventListener('input', links);
     document.getElementById('kPaste').addEventListener('input', function(){
