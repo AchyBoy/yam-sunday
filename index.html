@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v6.1">
+<meta name="x-yam-version" content="v6.2">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -317,11 +317,12 @@
     fetch(API + SHEET).then(function(r){ return r.json(); }).then(function(j){
       if (!j || !j.data) {
         if (data.stamp === 0) data.stamp = Date.now();
-        push(); return;
+        push(); rollOn(); return;
       }
       if (Number(j.updatedAt) > (data.stamp || 0) && !busy()) adopt(j.data, j.updatedAt);
       else syncSay('up to date');
-    }).catch(function(){ syncSay('saved on this phone'); });
+      rollOn();
+    }).catch(function(){ syncSay('saved on this phone'); rollOn(); });
   }
 
   /* ---------- drawing ---------- */
@@ -623,7 +624,8 @@
      the one coming. Started on a Saturday night, it says tomorrow. */
   var MONTHS = ['January','February','March','April','May','June','July',
                 'August','September','October','November','December'];
-  function nextSunday(from){
+  function nextSunday(from){ return whenFor(nextSundayDate(from)); }
+  function nextSundayDate(from){
     var now = from ? new Date(from) : new Date();
     var d = new Date(now); d.setHours(0,0,0,0);
     var wd = d.getDay();                       // 0 is Sunday
@@ -633,7 +635,47 @@
     // hand back the day we are standing in.
     if (wd === 0 && now.getHours() >= 12) d.setDate(d.getDate() + 7);
     else if (wd !== 0) d.setDate(d.getDate() + (7 - wd));
-    return 'Sunday morning, ' + MONTHS[d.getMonth()] + ' ' + d.getDate();
+    return d;
+  }
+
+  /* ---------- the date keeps itself ----------
+     The sheet carries the real Sunday it is for (data.sunday, YYYY-MM-DD).
+     Once that Sunday is over, the next time any phone opens it, it files
+     itself under Sundays before and comes up blank for the coming Sunday.
+     Runs only AFTER a pull, so a phone with an old copy cannot file a stale
+     sheet over the one everybody else has. */
+  function ymd(d){ return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function sundayFor(t){                       // that day if Sunday, else the coming one
+    var d = new Date(t); d.setHours(0,0,0,0);
+    if (d.getDay() !== 0) d.setDate(d.getDate() + (7 - d.getDay()));
+    return d;
+  }
+  function whenFor(d){ return 'Sunday morning, ' + MONTHS[d.getMonth()] + ' ' + d.getDate(); }
+  function fromYmd(s){ var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+
+  function rollOn(){
+    if (busy()) return;
+    var changed = false;
+    if (!data.sunday) {
+      // a sheet from before v6.2: the typed date was never kept up (it said
+      // September 27 on October 11), so go by the day it was last touched
+      var d0 = sundayFor(data.stamp || Date.now());
+      data.sunday = ymd(d0); data.when = whenFor(d0); changed = true;
+    }
+    var cur = sundayFor(Date.now());
+    if (data.sunday < ymd(cur)) {
+      if (!data.past) data.past = [];
+      var done = data.past[0] && data.past[0].sunday === data.sunday;
+      if (anythingOn() && !done) {
+        data.past.unshift(fileItAway());
+        data.past = data.past.slice(0, 40);
+      }
+      data.jobs.forEach(function(j){ j.who = ''; });
+      data.kids.forEach(function(k){ k.here = false; });
+      data.sunday = ymd(cur); data.when = whenFor(cur);
+      changed = true;
+    }
+    if (changed) { when.value = data.when; save(); drawAll(); }
   }
 
   function fileItAway(){
@@ -643,6 +685,7 @@
       jobs: data.jobs.map(function(j){ return { lbl:j.lbl, who:j.who }; }),
       here: here,
       of: data.kids.length,
+      sunday: data.sunday,
       savedAt: Date.now()
     };
   }
@@ -669,6 +712,7 @@
     data.jobs.forEach(function(j){ j.who = ''; });
     data.kids.forEach(function(k){ k.here = false; });
     data.when = nxt;
+    data.sunday = ymd(nextSundayDate());
     when.value = nxt;
     save(); drawAll();
     toast(anything ? 'Filed away' : nxt.replace('Sunday morning, ', ''));
