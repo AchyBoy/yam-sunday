@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v6.3">
+<meta name="x-yam-version" content="v6.4">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -53,7 +53,7 @@
   .chip .x{color:inherit; opacity:.55; font-size:17px; margin-left:2px; display:none}
   body.editing .chip .x{display:inline}
   /* the young men: big tiles, because 90% of Sunday is tapping "here".
-     The pencil opens his details: phone, address, first visit, notes. */
+     The 📃 opens his details: phone, address, first visit, notes. */
   .kids{display:grid; grid-template-columns:1fr 1fr; gap:9px}
   .kid{background:var(--card); border:1px solid var(--line); border-radius:14px; display:flex;
     min-height:62px; overflow:hidden}
@@ -62,7 +62,7 @@
   .kid .nm{font-size:17px; font-weight:600; line-height:1.2; overflow-wrap:anywhere}
   .kid .sub{display:block; font-size:12px; font-weight:500; color:var(--dim); margin-top:2px}
   .kid .dot{flex:0 0 11px; width:11px; height:11px; border-radius:50%; background:#3b3025}
-  .kid .pen{flex:0 0 46px; background:none; border:0; border-left:1px solid var(--line); font-size:17px;
+  .kid .pen{flex:0 0 50px; background:none; border:0; border-left:1px solid var(--line); font-size:24px;
     cursor:pointer; padding:0}
   .kid.here{background:var(--gold); border-color:var(--gold)}
   .kid.here .tap{color:#171009}
@@ -450,7 +450,7 @@
         k.here = !k.here; save(); drawAll();
       });
       var pen = document.createElement('button'); pen.className = 'pen';
-      pen.textContent = '✏️'; pen.setAttribute('aria-label', 'Details for ' + k.name);
+      pen.textContent = '📃'; pen.setAttribute('aria-label', 'Details for ' + k.name);
       pen.addEventListener('click', function(){ openKid(k); });
       d.appendChild(b); d.appendChild(pen);
       kidsEl.appendChild(d);
@@ -523,7 +523,7 @@
     function links(){
       var h = '', ph = val('phone').replace(/[^0-9+]/g, ''), ad = val('addr').replace(/\s+/g, ' ');
       if (ph) h += '<a href="tel:' + ph + '">Call</a><a href="sms:' + ph + '">Text</a>';
-      if (ad) h += '<a target="_blank" href="' + mapUrl(ad) + '">Map it</a>';
+      if (ad) h += '<a target="_blank" href="' + mapUrl(ad) + '">🗺️ Map it</a>';
       document.getElementById('kLinks').innerHTML = h;
       document.getElementById('kShare').style.display = (ph || ad) ? 'block' : 'none';
     }
