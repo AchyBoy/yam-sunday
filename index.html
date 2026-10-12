@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v5.9">
+<meta name="x-yam-version" content="v6.0">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -86,6 +86,8 @@
   .sheet .links{display:flex; gap:9px; margin-top:8px}
   .sheet .links a{flex:1; text-align:center; text-decoration:none; color:var(--gold); border:1px solid var(--line);
     border-radius:10px; padding:10px; font-size:15px; font-weight:600}
+  .sheet .share{display:none; width:100%; margin-top:9px; background:var(--gold); border:0; color:#171009;
+    border-radius:10px; padding:12px; font:inherit; font-size:15px; font-weight:700; cursor:pointer}
   .sheet .btns{display:flex; gap:9px; margin-top:18px}
   .sheet .btns button{flex:1; border-radius:12px; padding:14px 10px; font:inherit; font-size:15px; font-weight:700;
     cursor:pointer; border:1px solid var(--line); background:none; color:var(--ink)}
@@ -480,6 +482,7 @@
       field('Phone', 'phone', 'Phone number') +
       field('Address', 'addr', 'Street, town', true) +
       '<div class="links" id="kLinks"></div>' +
+      '<button class="share" id="kShare">Share contact</button>' +
       field('First visit', 'first', 'October 11') +
       field('Notes', 'notes', 'Who brought him, anything to remember', true) +
       '<div class="btns"><button class="rm" id="kRm">Remove</button>' +
@@ -490,23 +493,49 @@
     function links(){
       var h = '', ph = val('phone').replace(/[^0-9+]/g, ''), ad = val('addr').replace(/\s+/g, ' ');
       if (ph) h += '<a href="tel:' + ph + '">Call</a><a href="sms:' + ph + '">Text</a>';
-      if (ad) h += '<a target="_blank" href="' + mapUrl(ad) + '">Map it</a><a href="#" id="kShare">Share</a>';
+      if (ad) h += '<a target="_blank" href="' + mapUrl(ad) + '">Map it</a>';
       document.getElementById('kLinks').innerHTML = h;
-      var sh = document.getElementById('kShare');
-      if (sh) sh.addEventListener('click', function(e){
-        e.preventDefault();
-        // the address as he typed it, then a map link that opens on any phone
-        var a = val('addr'), txt = (val('name') || k.name) + '\n' + a + '\n' + mapUrl(a.replace(/\s+/g, ' '));
-        if (navigator.share){ navigator.share({ text: txt }).catch(function(){}); return; }
-        if (navigator.clipboard){
-          navigator.clipboard.writeText(txt).then(function(){ toast('Copied'); },
-            function(){ window.prompt('Copy this', txt); });
-          return;
-        }
-        window.prompt('Copy this', txt);
-      });
+      document.getElementById('kShare').style.display = (ph || ad) ? 'block' : 'none';
     }
     function mapUrl(ad){ return 'https://maps.apple.com/?q=' + encodeURIComponent(ad); }
+
+    /* Share contact: a contact CARD (.vcf), so it lands in Messages as a card
+       you tap to save, with his address and a map link inside. A phone that
+       will not share a file gets the same thing as plain lines instead. */
+    function vc(t){ return String(t).replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/([,;])/g,'\\$1'); }
+    function card(){
+      var nm = val('name') || k.name, ph = val('phone'), ad = val('addr'), first = val('first'),
+          parts = nm.split(/\s+/), last = parts.length > 1 ? parts.pop() : '', given = parts.join(' ');
+      var lines = ad.split(/\n/).map(function(x){ return x.trim(); }).filter(Boolean),
+          street = lines.length > 1 ? lines.slice(0, -1).join(', ') : (lines[0] || ''),
+          town = lines.length > 1 ? lines[lines.length - 1] : '', city = town, st = '', zip = '',
+          m = /^(.*?)[\s,]+([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/.exec(town);
+      if (m) { city = m[1]; st = m[2].toUpperCase(); zip = m[3]; }
+      var v = ['BEGIN:VCARD', 'VERSION:3.0', 'N:' + vc(last) + ';' + vc(given) + ';;;', 'FN:' + vc(nm)];
+      if (ph) v.push('TEL;TYPE=CELL:' + ph);
+      if (ad) {
+        v.push('ADR;TYPE=HOME:;;' + vc(street) + ';' + vc(city) + ';' + vc(st) + ';' + vc(zip) + ';');
+        v.push('URL:' + mapUrl(ad.replace(/\s+/g, ' ')));
+      }
+      v.push('NOTE:' + vc('YAM' + (first ? ', first visit ' + first : '')));
+      v.push('END:VCARD');
+      return { name: nm, vcf: v.join('\r\n') + '\r\n',
+        text: [nm, ph, ad, ad ? mapUrl(ad.replace(/\s+/g, ' ')) : ''].filter(Boolean).join('\n') };
+    }
+    document.getElementById('kShare').addEventListener('click', function(){
+      var c = card(), file = null;
+      try { file = new File([c.vcf], c.name.replace(/[^\w ]+/g, '') + '.vcf', { type:'text/vcard' }); } catch(e){}
+      if (file && navigator.canShare && navigator.canShare({ files:[file] })) {
+        navigator.share({ files:[file] }).catch(function(){}); return;
+      }
+      if (navigator.share){ navigator.share({ text: c.text }).catch(function(){}); return; }
+      if (navigator.clipboard){
+        navigator.clipboard.writeText(c.text).then(function(){ toast('Copied'); },
+          function(){ window.prompt('Copy this', c.text); });
+        return;
+      }
+      window.prompt('Copy this', c.text);
+    });
     links();
     bg.querySelector('[data-k="phone"]').addEventListener('input', links);
     bg.querySelector('[data-k="addr"]').addEventListener('input', links);
