@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v6.6">
+<meta name="x-yam-version" content="v6.7">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -446,7 +446,8 @@
   // warning once he is within 60 days of aging out
   function tileSub(k){
     var bits = [], a = ageInfo(k.bday);
-    if (a) {
+    if (a && a.noYear) bits.push((a.days <= 7 ? '🎂 ' : '') + 'bday ' + a.md + ' · year?');
+    else if (a) {
       bits.push((a.days <= 7 ? '🎂 ' : '') + a.age + ' · bday ' + a.md);
       var left = Math.round((a.out - new Date().setHours(0,0,0,0)) / 864e5);
       if (left <= 0) bits.push('aged out');
@@ -529,12 +530,16 @@
     var thisYr = new Date(t.getFullYear(), mo, d);
     if (thisYr > t) age--;
     var next = thisYr >= t ? thisYr : new Date(t.getFullYear() + 1, mo, d);
+    // 🔴 the iPhone calendar starts on THIS year, so a birthday picked by
+    // month and day alone lands as 2026. Keep the birthday, drop the age.
+    if (age < 8) return { noYear: true, next: next, days: Math.round((next - t) / 864e5), md: MON3[mo] + ' ' + d };
     return { age: age, next: next, days: Math.round((next - t) / 864e5),
              out: new Date(y + 18, mo, d), md: MON3[mo] + ' ' + d };
   }
   function ageLine(a){
     if (!a) return '';
     var nx = a.days === 0 ? 'Birthday is TODAY' : 'Birthday ' + a.md + ', in ' + a.days + (a.days === 1 ? ' day' : ' days');
+    if (a.noYear) return nx + '.<br><b style="color:var(--gold)">Pick the year he was born</b> (scroll the year in the calendar) to see his age and when he ages out.';
     var out = a.age >= 18 ? 'Aged out ' : 'Ages out ';
     return 'Age ' + a.age + '. ' + nx + '.<br>' + out + MONTHS[a.out.getMonth()] + ' ' + a.out.getDate() + ', ' +
       a.out.getFullYear() + ' (turns 18).';
