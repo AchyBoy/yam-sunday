@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v6.0">
+<meta name="x-yam-version" content="v6.1">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -454,13 +454,12 @@
     });
     var add = document.createElement('button');
     add.className = 'add'; add.textContent = '+ Add a name';
+    // A new name opens the details sheet, so a visitor's address can be
+    // pasted in one go. Somebody new on a Sunday is in the room, so he
+    // starts ticked with today as his first visit.
     add.addEventListener('click', function(){
-      var n = window.prompt('Name');
-      if (!n) return;
-      n.split(',').forEach(function(one){
-        one = one.trim(); if (one) data.kids.push({ name:one, here:false });
-      });
-      save(); drawAll();
+      var t = new Date();
+      openKid({ name:'', here:true, first: MONTHS[t.getMonth()] + ' ' + t.getDate() }, true);
     });
     kidsEl.appendChild(add);
   }
@@ -468,7 +467,33 @@
   /* ---------- one young man's details ----------
      Kept on the same sheet blob, never in the shared text or the printout. */
   var sheetOpen = false;
-  function openKid(k){
+  /* Pasted contact text into fields. Built for what he pastes off a text:
+       "Jaylon Castille / 2045 Terrace Road / St Martinville LA 70582", in any
+       order, with or without a phone. A line it cannot place goes to Notes. */
+  var PHONE = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/,
+      TOWN  = /\b[A-Za-z]{2}\.?,?\s+\d{5}(?:-\d{4})?\b/,
+      STREET = /^\d+[A-Za-z]?\s+\S/;
+  function parseContact(text){
+    var out = { name:'', phone:'', addr:'', notes:'' }, street = [], rest = [];
+    String(text).split(/\r?\n/).forEach(function(raw){
+      var l = raw.replace(/^\s*(name|phone|cell|address|addr)\s*:\s*/i, '').trim();
+      if (!l) return;
+      var pm = PHONE.exec(l);
+      if (pm && !out.phone && !TOWN.test(l) && !STREET.test(l.replace(pm[0], '').trim() || 'x')) {
+        out.phone = pm[0].trim();
+        l = l.replace(pm[0], '').replace(/^[\s,:-]+|[\s,:-]+$/g, '');
+        if (!l) return;
+      }
+      if (STREET.test(l) || TOWN.test(l)) { street.push(l); return; }
+      if (!out.name && !/\d/.test(l)) { out.name = l; return; }
+      rest.push(l);
+    });
+    out.addr = street.join('\n');
+    out.notes = rest.join('\n');
+    return out;
+  }
+
+  function openKid(k, isNew){
     sheetOpen = true;
     var bg = document.createElement('div'); bg.className = 'sheet';
     function field(lbl, key, ph, area){
@@ -478,6 +503,8 @@
           (key === 'phone' ? ' type="tel"' : '') + '>');
     }
     bg.innerHTML = '<div class="in">' +
+      '<label>Paste his info</label>' +
+      '<textarea id="kPaste" placeholder="Paste a name, address and phone here and it fills in the rest"></textarea>' +
       field('Name', 'name', 'Name') +
       field('Phone', 'phone', 'Phone number') +
       field('Address', 'addr', 'Street, town', true) +
@@ -539,16 +566,38 @@
     links();
     bg.querySelector('[data-k="phone"]').addEventListener('input', links);
     bg.querySelector('[data-k="addr"]').addEventListener('input', links);
+    document.getElementById('kPaste').addEventListener('input', function(){
+      var p = parseContact(this.value);
+      ['name','phone','addr'].forEach(function(key){
+        if (p[key]) bg.querySelector('[data-k="' + key + '"]').value = p[key];
+      });
+      if (p.notes) {
+        var n = bg.querySelector('[data-k="notes"]');
+        if (n.value.indexOf(p.notes) === -1) n.value = (n.value.trim() ? n.value.trim() + '\n' : '') + p.notes;
+      }
+      links();
+    });
+    if (isNew) {
+      document.getElementById('kRm').style.display = 'none';
+      setTimeout(function(){ document.getElementById('kPaste').focus(); }, 50);
+    }
     function close(){ sheetOpen = false; if (bg.parentNode) bg.parentNode.removeChild(bg); }
     bg.addEventListener('click', function(e){ if (e.target === bg) close(); });
     document.getElementById('kX').addEventListener('click', close);
     document.getElementById('kOk').addEventListener('click', function(){
+      if (isNew && !val('name')) { toast('Needs a name'); return; }
+      // pasting someone already on the list fills HIM in, not a second tile
+      if (isNew) {
+        var same = data.kids.filter(function(x){ return x.name.toLowerCase() === val('name').toLowerCase(); })[0];
+        if (same) { k = same; isNew = false; }
+      }
       Array.prototype.forEach.call(ins, function(el){
         var key = el.getAttribute('data-k'), v = el.value.trim();
         if (key === 'name') { if (v) k.name = v; return; }
         if (v) k[key] = v; else delete k[key];
       });
-      close(); save(); drawAll(); toast('Saved');
+      if (isNew) data.kids.push(k);
+      close(); save(); drawAll(); toast(isNew ? 'Added ' + k.name : 'Saved');
     });
     document.getElementById('kRm').addEventListener('click', function(){
       if (!window.confirm('Take ' + k.name + ' off the list?')) return;
