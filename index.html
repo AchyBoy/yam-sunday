@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v6.7">
+<meta name="x-yam-version" content="v6.8">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -181,6 +181,9 @@
   <div class="row">
     <button id="print">Print</button>
     <button id="share" class="go">Share it</button>
+  </div>
+  <div class="row">
+    <button id="cal">📅 Birthdays in my Calendar</button>
   </div>
 
   <p class="hint">It saves itself, and it saves for everybody, so whoever pulls this up Sunday
@@ -964,6 +967,12 @@
   setInterval(function(){ if (!document.hidden && !busy()) pull(); }, 20000);
   document.addEventListener('visibilitychange', function(){ if (!document.hidden) pull(); });
   window.addEventListener('online', function(){ push(); });
+
+  /* Subscribes this phone's Calendar to every birthday and 18th on the sheet,
+     served by the backend, so a name added later shows up on its own. */
+  document.getElementById('cal').addEventListener('click', function(){
+    location.href = 'webcal://api.jobhubgo.com/api/yam/' + SHEET + '/birthdays.ics';
+  });
 
   document.getElementById('share').addEventListener('click', function(){
     shareText(asText());
