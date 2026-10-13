@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v6.9">
+<meta name="x-yam-version" content="v7.0">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -107,6 +107,10 @@
   .empty{color:#7c6e59; font-size:14px; line-height:1.55; margin:0 2px}
   .tnext{color:var(--dim); font-size:14px; line-height:1.5; margin:2px 2px 0}
   .tnext b{color:var(--ink); font-weight:600}
+  .tsub{display:block; width:100%; margin:-3px 0 9px; background:none; border:1px dashed #4a3616;
+    color:var(--gold); border-radius:12px; padding:10px 12px; font:inherit; font-size:14px; text-align:left;
+    cursor:pointer}
+  .tsub b{color:var(--ink)}
 
   .row{display:flex; gap:9px; margin-top:22px; flex-wrap:wrap}
   .row button{flex:1; min-width:110px; background:#221b14; border:1px solid var(--line); color:var(--ink);
@@ -141,7 +145,7 @@
     .kid:not(.here){opacity:.35}
     .kid .pen,.kid .sub{display:none!important}
     .job .lbl input{color:#555}
-    .row,.kill,.hint,footer,.toast,.add,.men,.chev,.tnext{display:none!important}
+    .row,.kill,.hint,footer,.toast,.add,.men,.chev,.tnext,.tsub{display:none!important}
     h2{color:#000}
   }
 </style>
@@ -166,6 +170,7 @@
   <h2>Testimony <span class="c" id="tLeft"></span></h2>
   <div id="testi"></div>
   <p class="tnext" id="tNext"></p>
+  <div class="row" style="margin-top:12px"><button id="heads">📣 Send a heads up</button></div>
 
   <h2>Who is here <span class="c" id="count"></span></h2>
   <div class="kids" id="kids"></div>
@@ -721,13 +726,33 @@
 
   /* Same rows as the jobs: a tap and a spin to swap somebody, say a young man
      who is not there. Under it, next Sunday's three, so they get a week. */
+  function backup(nm){
+    var here = data.kids.filter(function(k){ return k.here; }).map(function(k){ return k.name; });
+    if (!here.length || here.indexOf(nm) !== -1) return '';
+    return testiOrder(here, data.tDone.k || {}, 1, testiNames())[0] || '';
+  }
+
+  /* The heads up he sends the class: who is up this Sunday and next, and
+     that everybody keeps a little something ready in case. */
+  function headsText(){
+    var nx = testiPicks(data, testiDone(data), testiNames()),
+        nn = [nx.man].concat(nx.kids).filter(Boolean), tn = testiNames(),
+        d = data.sunday ? fromYmd(data.sunday) : sundayFor(Date.now()),
+        d2 = new Date(d); d2.setDate(d2.getDate() + 7);
+    var out = 'YAM testimony\n\n';
+    out += 'This Sunday, ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ':\n' + (tn.length ? tn.join('\n') : 'nobody yet') + '\n\n';
+    if (nn.length) out += 'Next Sunday, ' + MONTHS[d2.getMonth()] + ' ' + d2.getDate() + ':\n' + nn.join('\n') + '\n\n';
+    out += 'Everybody have a little something ready. If someone is out, the next one up takes his place.';
+    return out;
+  }
+
   function drawTesti(){
     var box = document.getElementById('testi'), t = data.testify;
     box.innerHTML = '';
     var rows = [{ lbl:'Teacher', names:data.men, get:function(){ return t.man; }, set:function(v){ t.man = v; } }];
     [0, 1].forEach(function(i){
       rows.push({ lbl:'Young man', names:data.kids.map(function(k){ return k.name; }),
-        get:function(){ return t.kids[i] || ''; }, set:function(v){ t.kids[i] = v; } });
+        get:function(){ return t.kids[i] || ''; }, set:function(v){ t.kids[i] = v; }, backup:backup });
     });
     rows.forEach(function(r){
       var cur = r.get(), d = document.createElement('div');
@@ -747,6 +772,18 @@
       w.appendChild(sel); w.appendChild(ch);
       d.appendChild(l); d.appendChild(w);
       box.appendChild(d);
+      /* Picked but not ticked here, once the register has started: the next
+         young man in line who IS here takes his place this Sunday. He keeps
+         his own turn, so he is up again next week. */
+      if (r.backup && cur) {
+        var sub = r.backup(cur);
+        if (sub) {
+          var b = document.createElement('button'); b.className = 'tsub';
+          b.innerHTML = esc(cur) + ' not here? Tap and <b>' + esc(sub) + '</b> takes his place';
+          b.addEventListener('click', function(){ r.set(sub); save(); drawTesti(); toast(sub + ' is up'); });
+          box.appendChild(b);
+        }
+      }
     });
     var open = 1 - (t.man ? 1 : 0) + 2 - t.kids.filter(Boolean).length;
     document.getElementById('tLeft').textContent = open ? open + ' still open' : 'all set';
@@ -1071,6 +1108,10 @@
      served by the backend, so a name added later shows up on its own. */
   document.getElementById('cal').addEventListener('click', function(){
     location.href = 'webcal://api.jobhubgo.com/api/yam/' + SHEET + '/birthdays.ics';
+  });
+
+  document.getElementById('heads').addEventListener('click', function(){
+    shareText(headsText());
   });
 
   document.getElementById('share').addEventListener('click', function(){
