@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v6.8">
+<meta name="x-yam-version" content="v6.9">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -105,6 +105,8 @@
   body.editing .men{display:block}
   .men .lead{color:#7c6e59; font-size:13px; margin:0 2px 9px}
   .empty{color:#7c6e59; font-size:14px; line-height:1.55; margin:0 2px}
+  .tnext{color:var(--dim); font-size:14px; line-height:1.5; margin:2px 2px 0}
+  .tnext b{color:var(--ink); font-weight:600}
 
   .row{display:flex; gap:9px; margin-top:22px; flex-wrap:wrap}
   .row button{flex:1; min-width:110px; background:#221b14; border:1px solid var(--line); color:var(--ink);
@@ -139,7 +141,7 @@
     .kid:not(.here){opacity:.35}
     .kid .pen,.kid .sub{display:none!important}
     .job .lbl input{color:#555}
-    .row,.kill,.hint,footer,.toast,.add,.men,.chev{display:none!important}
+    .row,.kill,.hint,footer,.toast,.add,.men,.chev,.tnext{display:none!important}
     h2{color:#000}
   }
 </style>
@@ -160,6 +162,10 @@
     <p class="lead">The men in the picker. Take one off or add one.</p>
     <div class="chips" id="men"></div>
   </div>
+
+  <h2>Testimony <span class="c" id="tLeft"></span></h2>
+  <div id="testi"></div>
+  <p class="tnext" id="tNext"></p>
 
   <h2>Who is here <span class="c" id="count"></span></h2>
   <div class="kids" id="kids"></div>
@@ -235,11 +241,50 @@
   var RENAME = { "Bro Paul":"Paul", "Bro Daniel":"Daniel", "Bro Drew":"Andrew",
                  "The worship crew":"" };
 
+  /* ---------- testimony ----------
+     One teacher and two young men every Sunday, taken in turn. Whoever went
+     longest ago (or never) is next, list order breaks a tie, so a name added
+     later just joins the queue. A young man picked but not there that Sunday
+     is NOT marked as gone, so he comes up again the week after. */
+  function testiOrder(list, done, n, skip){
+    return list.map(function(nm, i){ return { nm:nm, i:i, d:done[nm] || '' }; })
+      .filter(function(x){ return skip.indexOf(x.nm) === -1; })
+      .sort(function(a, b){ return a.d < b.d ? -1 : a.d > b.d ? 1 : a.i - b.i; })
+      .slice(0, n).map(function(x){ return x.nm; });
+  }
+  function testiPicks(d, done, skip){
+    skip = skip || [];
+    var kids = d.kids.map(function(k){ return k.name; });
+    var m = testiOrder(d.men, done.m || {}, 1, skip), k = testiOrder(kids, done.k || {}, 2, skip);
+    return { man: m[0] || '', kids: [k[0] || '', k[1] || ''] };
+  }
+  // who testified on the sheet's Sunday, as the rotation will remember it
+  function testiDone(d){
+    var t = d.testify || { man:'', kids:[] }, day = d.sunday || ymd(new Date()),
+        done = { m: Object.assign({}, d.tDone.m), k: Object.assign({}, d.tDone.k) },
+        anyTicked = d.kids.some(function(k){ return k.here; });
+    if (t.man) done.m[t.man] = day;
+    t.kids.forEach(function(nm){
+      if (!nm) return;
+      var k = d.kids.filter(function(x){ return x.name === nm; })[0];
+      // nobody ticked at all = the register was not kept, so count him
+      if (!anyTicked || (k && k.here)) done.k[nm] = day;
+    });
+    return done;
+  }
+  // filing a Sunday away: remember who went, and line up the next three
+  function testiRoll(){
+    data.tDone = testiDone(data);
+    data.testify = testiPicks(data, data.tDone);
+  }
+
   function migrate(d){
     if (!d) return d;
     if (!d.kids) d.kids = [];
     if (!d.men)  d.men  = [];
     if (!d.past) d.past = [];
+    if (!d.tDone) d.tDone = { m:{}, k:{} };
+    if (!d.testify) d.testify = testiPicks(d, d.tDone);
     if (d.rosterV !== ROSTER_V){
       // ⚠️ ADD what is missing. v2 replaced the list outright and lost three
       // names he had already given me. A tick already on the sheet survives.
@@ -669,8 +714,49 @@
     });
   }
 
+  function testiNames(){
+    var t = data.testify || { man:'', kids:[] };
+    return [t.man].concat(t.kids).filter(Boolean);
+  }
+
+  /* Same rows as the jobs: a tap and a spin to swap somebody, say a young man
+     who is not there. Under it, next Sunday's three, so they get a week. */
+  function drawTesti(){
+    var box = document.getElementById('testi'), t = data.testify;
+    box.innerHTML = '';
+    var rows = [{ lbl:'Teacher', names:data.men, get:function(){ return t.man; }, set:function(v){ t.man = v; } }];
+    [0, 1].forEach(function(i){
+      rows.push({ lbl:'Young man', names:data.kids.map(function(k){ return k.name; }),
+        get:function(){ return t.kids[i] || ''; }, set:function(v){ t.kids[i] = v; } });
+    });
+    rows.forEach(function(r){
+      var cur = r.get(), d = document.createElement('div');
+      d.className = 'job' + (cur ? ' filled' : '');
+      var l = document.createElement('span'); l.className = 'lbl';
+      l.innerHTML = '<input value="' + r.lbl + '" readonly tabindex="-1">';
+      var w = document.createElement('span'); w.className = 'pickwrap';
+      var sel = document.createElement('select'), names = r.names.slice();
+      if (cur && names.indexOf(cur) === -1) names.push(cur);
+      sel.innerHTML = '<option value="">nobody yet</option>' + names.map(function(n){
+        return '<option value="' + esc(n).replace(/"/g, '&quot;') + '">' + esc(n) + '</option>';
+      }).join('');
+      sel.value = cur;
+      sel.className = cur ? '' : 'none';
+      sel.addEventListener('change', function(){ r.set(sel.value); save(); drawTesti(); });
+      var ch = document.createElement('span'); ch.className = 'chev'; ch.textContent = '▼';
+      w.appendChild(sel); w.appendChild(ch);
+      d.appendChild(l); d.appendChild(w);
+      box.appendChild(d);
+    });
+    var open = 1 - (t.man ? 1 : 0) + 2 - t.kids.filter(Boolean).length;
+    document.getElementById('tLeft').textContent = open ? open + ' still open' : 'all set';
+    // next Sunday, assuming these three go this week
+    var nx = testiPicks(data, testiDone(data), testiNames()), nn = [nx.man].concat(nx.kids).filter(Boolean);
+    document.getElementById('tNext').innerHTML = nn.length ? 'Next Sunday: <b>' + esc(nn.join(', ')) + '</b>' : '';
+  }
+
   function drawAll(){
-    drawJobs(); drawMen(); drawKids(); drawPast(); counts();
+    drawJobs(); drawTesti(); drawMen(); drawKids(); drawPast(); counts();
     document.getElementById('whenTxt').textContent = data.when || 'Pick a date';
     var pk = document.getElementById('whenPick');
     if (document.activeElement !== pk) pk.value = data.sunday || '';
@@ -752,6 +838,7 @@
         data.past.unshift(fileItAway());
         data.past = data.past.slice(0, 40);
       }
+      if (!done) testiRoll();
       data.jobs.forEach(function(j){ j.who = ''; });
       data.kids.forEach(function(k){ k.here = false; });
       data.sunday = ymd(cur); data.when = whenFor(cur);
@@ -767,6 +854,7 @@
       jobs: data.jobs.map(function(j){ return { lbl:j.lbl, who:j.who }; }),
       here: here,
       of: data.kids.length,
+      testify: [data.testify.man].concat(data.testify.kids).filter(Boolean),
       sunday: data.sunday,
       savedAt: Date.now()
     };
@@ -788,6 +876,7 @@
       data.past.unshift(fileItAway());
       data.past = data.past.slice(0, 40);      // the blob stays small
     }
+    testiRoll();
     // A new Sunday genuinely has nobody on it yet, so the jobs go back to open
     // and the header's "4 still open" means something real again. Last time is
     // kept below, so nothing is lost by blanking them.
@@ -817,6 +906,7 @@
       var lines = (p.jobs || []).map(function(j){
         return esc(j.lbl || '?') + ': <b>' + esc(j.who || 'nobody') + '</b>';
       });
+      if (p.testify && p.testify.length) lines.push('Testimony: <b>' + esc(p.testify.join(', ')) + '</b>');
       lines.push('Here: <b>' + (p.here.length ? esc(p.here.join(', ')) : 'nobody was ticked') + '</b>');
       body.innerHTML = lines.join('<br>');
       var sh = document.createElement('button'); sh.className = 'psh'; sh.textContent = 'Share this Sunday';
@@ -863,7 +953,8 @@
   function sheetPicture(cb){
     var W = 1100, pad = 70, lh = 58, here = data.kids.filter(function(k){ return k.here; }),
         away = data.kids.filter(function(k){ return !k.here; });
-    var H = pad * 2 + 150 + data.jobs.length * lh + 90 + Math.max(1, here.length) * lh + (away.length ? 90 + away.length * 48 : 0);
+    var tn = testiNames();
+    var H = pad * 2 + 150 + (data.jobs.length + (tn.length ? 1 : 0)) * lh + 90 + Math.max(1, here.length) * lh + (away.length ? 90 + away.length * 48 : 0);
     var c = document.createElement('canvas'); c.width = W; c.height = H;
     var g = c.getContext('2d'), y = pad;
     g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
@@ -876,6 +967,11 @@
       g.fillStyle = '#000'; g.font = '600 38px -apple-system, Helvetica, Arial'; g.fillText(j.who.trim() || 'still open', pad + 330, y);
       y += lh;
     });
+    if (tn.length) {
+      g.fillStyle = '#555'; g.font = '34px -apple-system, Helvetica, Arial'; g.fillText('Testimony:', pad, y);
+      g.fillStyle = '#000'; g.font = '600 38px -apple-system, Helvetica, Arial'; g.fillText(tn.join(', '), pad + 330, y);
+      y += lh;
+    }
     y += 40;
     g.fillStyle = '#8a6a1f'; g.font = '700 30px -apple-system, Helvetica, Arial';
     g.fillText('HERE, ' + here.length + ' OF ' + data.kids.length, pad, y); y += lh;
@@ -925,6 +1021,7 @@
   function pastText(p){
     var out = 'YAM · ' + (p.when || '') + '\n\n';
     (p.jobs || []).forEach(function(j){ out += (j.lbl || '?') + ': ' + ((j.who || '').trim() || 'nobody') + '\n'; });
+    if (p.testify && p.testify.length) out += 'Testimony: ' + p.testify.join(', ') + '\n';
     out += '\nHere, ' + p.here.length + ' of ' + p.of + ':\n';
     out += p.here.length ? p.here.join('\n') + '\n' : 'nobody was ticked\n';
     return out;
@@ -944,6 +1041,8 @@
     data.jobs.forEach(function(j){
       out += (j.lbl || '?') + ': ' + (j.who.trim() || 'still open') + '\n';
     });
+    var tn = testiNames();
+    if (tn.length) out += 'Testimony: ' + tn.join(', ') + '\n';
     var here = data.kids.filter(function(k){ return k.here; });
     if (data.kids.length){
       out += '\nHere, ' + here.length + ' of ' + data.kids.length + ':\n';
