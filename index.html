@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v7.0">
+<meta name="x-yam-version" content="v7.1">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -283,6 +283,44 @@
     data.testify = testiPicks(data, data.tDone);
   }
 
+  /* ---------- job rotation ----------
+     Each job goes to whichever man did THAT job longest ago (or never). A man
+     already holding a job this Sunday is passed over while anyone else is free,
+     and a man taken off a job's turns (lil Paul on the Lesson, for now) is
+     never put on it. It only fills an empty job, so a name picked by hand stays. */
+  function jobKey(j){ return (j.lbl || '').trim().toLowerCase(); }
+  function lastAny(d, nm){
+    var best = '';
+    Object.keys(d.jDone || {}).forEach(function(k){ var v = d.jDone[k][nm] || ''; if (v > best) best = v; });
+    return best;
+  }
+  function canDo(d, j, nm){ return ((d.cant || {})[jobKey(j)] || []).indexOf(nm) === -1; }
+  function jobFill(d){
+    var used = d.jobs.map(function(j){ return j.who; }).filter(Boolean);
+    d.jobs.forEach(function(j){
+      if (j.who || !jobKey(j)) return;
+      var done = (d.jDone || {})[jobKey(j)] || {};
+      var c = d.men.map(function(nm, i){ return { nm:nm, i:i, d:done[nm] || '', a:lastAny(d, nm) }; })
+        .filter(function(x){ return canDo(d, j, x.nm); })
+        .sort(function(a, b){
+          var ua = used.indexOf(a.nm) !== -1, ub = used.indexOf(b.nm) !== -1;
+          if (ua !== ub) return ua ? 1 : -1;
+          return a.d < b.d ? -1 : a.d > b.d ? 1 : a.a < b.a ? -1 : a.a > b.a ? 1 : a.i - b.i;
+        });
+      if (c.length) { j.who = c[0].nm; used.push(c[0].nm); }
+    });
+  }
+  // filing a Sunday away: remember who had each job, blank them, line up the next
+  function jobRoll(){
+    var day = data.sunday || ymd(new Date());
+    data.jobs.forEach(function(j){
+      if (!j.who || !jobKey(j)) return;
+      (data.jDone[jobKey(j)] = data.jDone[jobKey(j)] || {})[j.who] = day;
+    });
+    data.jobs.forEach(function(j){ j.who = ''; });
+    jobFill(data);
+  }
+
   function migrate(d){
     if (!d) return d;
     if (!d.kids) d.kids = [];
@@ -290,6 +328,19 @@
     if (!d.past) d.past = [];
     if (!d.tDone) d.tDone = { m:{}, k:{} };
     if (!d.testify) d.testify = testiPicks(d, d.tDone);
+    if (!d.cant) d.cant = { lesson: ['Paul'] };       // lil Paul, not the lesson yet
+    if (!d.jDone) {
+      // first time: learn the rotation so far from the Sundays already filed
+      d.jDone = {};
+      d.past.slice().reverse().forEach(function(p){
+        var day = p.sunday || (p.savedAt ? ymd(new Date(p.savedAt)) : '');
+        if (!day) return;
+        (p.jobs || []).forEach(function(j){
+          if (!j.who || !jobKey(j)) return;
+          (d.jDone[jobKey(j)] = d.jDone[jobKey(j)] || {})[j.who] = day;
+        });
+      });
+    }
     if (d.rosterV !== ROSTER_V){
       // ⚠️ ADD what is missing. v2 replaced the list outright and lost three
       // names he had already given me. A tick already on the sheet survives.
@@ -431,6 +482,9 @@
         var oa = document.createElement('option');
         oa.value = '__add'; oa.textContent = '+ Someone else…';
         sel.appendChild(oa);
+        var ot = document.createElement('option');
+        ot.value = '__turns'; ot.textContent = '⟳ Who takes turns at this…';
+        sel.appendChild(ot);
         sel.value = j.who || '';
         sel.className = j.who.trim() ? '' : 'none';
       }
@@ -444,6 +498,7 @@
           }
           save(); drawAll(); return;
         }
+        if (sel.value === '__turns'){ sel.value = j.who || ''; openTurns(j); return; }
         j.who = sel.value;
         d.classList.toggle('filled', !!j.who.trim());
         sel.className = j.who.trim() ? '' : 'none';
@@ -468,6 +523,41 @@
       if (ins.length) ins[0].focus();
     });
     jobsEl.appendChild(add);
+  }
+
+  // which men take turns at one job: tap a name to take him off it or put him back
+  function openTurns(j){
+    if (!jobKey(j)) { toast('Name the job first'); return; }
+    sheetOpen = true;
+    var key = jobKey(j), off = ((data.cant || {})[key] || []).slice();
+    var bg = document.createElement('div'); bg.className = 'sheet';
+    bg.innerHTML = '<div class="in"><label>' + esc(j.lbl) + ': who takes turns</label>' +
+      '<p class="lead" style="margin:4px 2px 10px">Tap a name to take him off this job. Tap again to put him back.</p>' +
+      '<div class="chips" id="tTurns"></div>' +
+      '<div class="btns"><button id="tX">Cancel</button><button class="go" id="tOk">Save</button></div></div>';
+    document.body.appendChild(bg);
+    function draw(){
+      var el = document.getElementById('tTurns'); el.innerHTML = '';
+      data.men.forEach(function(nm){
+        var b = document.createElement('button'), out = off.indexOf(nm) !== -1;
+        b.className = 'chip'; b.style.opacity = out ? '.4' : '1';
+        b.style.textDecoration = out ? 'line-through' : 'none';
+        b.textContent = (out ? '' : '✓ ') + nm;
+        b.addEventListener('click', function(){
+          var i = off.indexOf(nm); if (i === -1) off.push(nm); else off.splice(i, 1); draw();
+        });
+        el.appendChild(b);
+      });
+    }
+    draw();
+    function close(){ sheetOpen = false; if (bg.parentNode) bg.parentNode.removeChild(bg); }
+    bg.addEventListener('click', function(e){ if (e.target === bg) close(); });
+    document.getElementById('tX').addEventListener('click', close);
+    document.getElementById('tOk').addEventListener('click', function(){
+      if (!data.cant) data.cant = {};
+      if (off.length) data.cant[key] = off; else delete data.cant[key];
+      close(); save(); drawAll(); toast('Saved');
+    });
   }
 
   function drawMen(){
@@ -876,7 +966,7 @@
         data.past = data.past.slice(0, 40);
       }
       if (!done) testiRoll();
-      data.jobs.forEach(function(j){ j.who = ''; });
+      if (!done) jobRoll(); else data.jobs.forEach(function(j){ j.who = ''; });
       data.kids.forEach(function(k){ k.here = false; });
       data.sunday = ymd(cur); data.when = whenFor(cur);
       changed = true;
@@ -914,10 +1004,9 @@
       data.past = data.past.slice(0, 40);      // the blob stays small
     }
     testiRoll();
-    // A new Sunday genuinely has nobody on it yet, so the jobs go back to open
-    // and the header's "4 still open" means something real again. Last time is
-    // kept below, so nothing is lost by blanking them.
-    data.jobs.forEach(function(j){ j.who = ''; });
+    // The jobs come off and the rotation puts the next man on each. Last time
+    // is kept below, so nothing is lost.
+    jobRoll();
     data.kids.forEach(function(k){ k.here = false; });
     data.when = nxt;
     data.sunday = ymd(nextSundayDate());
