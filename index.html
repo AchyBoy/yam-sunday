@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v7.6">
+<meta name="x-yam-version" content="v7.7">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -103,6 +103,9 @@
     padding:11px 17px; font-size:16px; cursor:pointer}
   .men{display:none; margin-top:10px}
   body.editing .men{display:block}
+  .cake{position:relative; display:inline-flex; align-items:center; margin:0 10px 0 -4px; padding:6px 10px;
+        border:1px dashed var(--line); border-radius:999px; color:var(--dim); font-size:14px}
+  .cake input{position:absolute; inset:0; width:100%; height:100%; opacity:0; font-size:16px}
   .men .lead{color:#7c6e59; font-size:13px; margin:0 2px 9px}
   .empty{color:#7c6e59; font-size:14px; line-height:1.55; margin:0 2px}
   .tnext{color:var(--dim); font-size:14px; line-height:1.5; margin:2px 2px 0}
@@ -163,8 +166,9 @@
   <h2>The men <span class="c" id="jobsLeft"></span></h2>
   <div id="jobs"></div>
   <p class="tnext" id="jNextTxt"></p>
+  <p class="tnext" id="bdayTxt"></p>
   <div class="men">
-    <p class="lead">The men in the picker. Take one off or add one.</p>
+    <p class="lead">The men in the picker. Tap a name to take him off, 🎂 for his birthday.</p>
     <div class="chips" id="men"></div>
   </div>
 
@@ -408,6 +412,12 @@
       d.rotV = 4;
       (d.jobs || []).forEach(function(j){ if (jobKey(j) === 'snacks') j.with = 'pre prayer'; });
       followLinks(d);
+    }
+    if (d.rotV === 4) {
+      // 10-25: Bernell (Elder Bro B) told the group his birthday is November 8
+      d.rotV = 5;
+      d.menBday = d.menBday || {};
+      if (!d.menBday['Elder Bro B'] && d.men.indexOf('Elder Bro B') !== -1) d.menBday['Elder Bro B'] = '2026-11-08';
     }
     if (d.rosterV !== ROSTER_V){
       // ⚠️ ADD what is missing. v2 replaced the list outright and lost three
@@ -667,6 +677,19 @@
         data.men.splice(i, 1); save(); drawAll();
       });
       menEl.appendChild(b);
+      // his birthday: the iPhone calendar, month and day is enough
+      var cb = document.createElement('label'); cb.className = 'cake';
+      var bd = (data.menBday || {})[n], a = ageInfo(bd);
+      cb.innerHTML = '🎂 ' + (a ? esc(a.md) : '');
+      var di = document.createElement('input'); di.type = 'date'; di.value = bd || '';
+      di.setAttribute('aria-label', n + ' birthday');
+      di.addEventListener('change', function(){
+        if (!data.menBday) data.menBday = {};
+        if (di.value) data.menBday[n] = di.value; else delete data.menBday[n];
+        di.blur(); save(); drawAll();
+      });
+      cb.appendChild(di);
+      menEl.appendChild(cb);
     });
     var add = document.createElement('button');
     add.className = 'add'; add.textContent = '+ Add a man';
@@ -980,8 +1003,20 @@
     document.getElementById('tNext').innerHTML = nn.length ? 'Next Sunday: <b>' + esc(nn.join(', ')) + '</b>' : '';
   }
 
+  // anybody's birthday in the next week, men and young men alike
+  function drawBdays(){
+    var list = [];
+    data.men.forEach(function(n){ var a = ageInfo((data.menBday || {})[n]); if (a) list.push({ n:n, a:a }); });
+    data.kids.forEach(function(k){ var a = ageInfo(k.bday); if (a) list.push({ n:k.name, a:a }); });
+    var soon = list.filter(function(x){ return x.a.days <= 7; }).sort(function(p, q){ return p.a.days - q.a.days; });
+    document.getElementById('bdayTxt').innerHTML = soon.map(function(x){
+      return '🎂 <b>' + esc(x.n) + '</b> ' + (x.a.days === 0 ? 'birthday TODAY' : x.a.days === 1 ? 'birthday tomorrow' :
+        'birthday ' + DAYS[x.a.next.getDay()] + ', ' + x.a.md);
+    }).join('<br>');
+  }
+
   function drawAll(){
-    drawJobs(); drawTesti(); drawMen(); drawKids(); drawPast(); counts();
+    drawBdays(); drawJobs(); drawTesti(); drawMen(); drawKids(); drawPast(); counts();
     document.getElementById('whenTxt').textContent = data.when || 'Pick a date';
     var pk = document.getElementById('whenPick');
     if (document.activeElement !== pk) pk.value = data.sunday || '';
