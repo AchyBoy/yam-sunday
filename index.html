@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v7.4">
+<meta name="x-yam-version" content="v7.5">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -304,7 +304,7 @@
     var out = d.jobs.map(function(){ return ''; }), used = [], forced = d.jNext || {}, groups = {}, todo = [];
     d.jobs.forEach(function(j, i){
       var key = jobKey(j);
-      if (!key) return;
+      if (!key || j.with) return;
       if (forced[key]) { out[i] = forced[key]; used.push(forced[key]); return; }
       if (!groups[key]) { groups[key] = { rows:[], last:(d.jLast || {})[key], j:j }; todo.push(groups[key]); }
       groups[key].rows.push(i);
@@ -319,7 +319,17 @@
         out[i] = nm; if (nm) used.push(nm);
       });
     });
+    // Snacks is not a job of its own, it rides with Pre prayer (10-25)
+    d.jobs.forEach(function(j, i){ if (j.with) out[i] = out[linkedTo(d, j)] || ''; });
     return out;
+  }
+  function linkedTo(d, j){
+    for (var i = 0; i < d.jobs.length; i++) if (jobKey(d.jobs[i]) === j.with) return i;
+    return -1;
+  }
+  // a hand pick on Pre prayer carries the Snacks with it
+  function followLinks(d){
+    d.jobs.forEach(function(j){ if (j.with) { var i = linkedTo(d, j); if (i !== -1) j.who = d.jobs[i].who; } });
   }
   function jobRoll(){
     var nx = jobNext(data);
@@ -367,6 +377,12 @@
         d.jobs.push({ lbl:'Singing', who: nx2[0] || '', pool:'kids' });
         d.jobs.push({ lbl:'Singing', who: nx2[1] || '', pool:'kids' });
       }
+    }
+    if (d.rotV === 3) {
+      // 10-25: whoever has Pre prayer brings the Snacks, it is prep, not a job
+      d.rotV = 4;
+      (d.jobs || []).forEach(function(j){ if (jobKey(j) === 'snacks') j.with = 'pre prayer'; });
+      followLinks(d);
     }
     if (d.rosterV !== ROSTER_V){
       // ⚠️ ADD what is missing. v2 replaced the list outright and lost three
@@ -528,6 +544,7 @@
         }
         if (sel.value === '__turns'){ sel.value = j.who || ''; openTurns(j); return; }
         j.who = sel.value;
+        if (data.jobs.some(function(x){ return x.with === jobKey(j); })) { followLinks(data); save(); drawAll(); return; }
         d.classList.toggle('filled', !!j.who.trim());
         sel.className = j.who.trim() ? '' : 'none';
         save(); counts();
