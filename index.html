@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v7.5">
+<meta name="x-yam-version" content="v7.6">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -251,7 +251,12 @@
      Everything goes round ALPHABETICALLY (Andrew, his ask 10-25): next up is
      the name after whoever had it last, wrapping back to the top. A man who
      is out (Ryan till January) is skipped until his date. */
-  function abc(a, b){ a = a.toLowerCase(); b = b.toLowerCase(); return a < b ? -1 : a > b ? 1 : 0; }
+  // Elder Bro B is Bernel, so he sorts as a B: Andrew, Bernel, Daniel (10-25)
+  var SORT_AS = { 'Elder Bro B':'Bernel' };
+  function abc(a, b){
+    a = (SORT_AS[a] || a).toLowerCase(); b = (SORT_AS[b] || b).toLowerCase();
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
   function isAway(d, nm){ var u = (d.away || {})[nm]; return !!u && ymd(new Date()) < u; }
   function turnOrder(names, last){
     var s = names.slice().sort(abc), i = 0;
@@ -313,6 +318,26 @@
     todo.forEach(function(g){
       g.c = turnOrder(pool(d, g.j).filter(function(nm){ return canDo(d, g.j, nm) && !isAway(d, nm); }), g.last);
     });
+    /* The men's one-man jobs are solved together: everybody as close to his
+       turn as can be, nobody twice. Squared, so two jobs each a step off beat
+       one job three off (lil Paul, out of the Lesson, would otherwise sit on
+       After lesson week after week). */
+    var solo = todo.filter(function(g){ return g.j.pool !== 'kids' && g.rows.length === 1; });
+    if (solo.length && solo.length <= 7) {
+      var best = null, pick = [];
+      (function dfs(k, cost, taken){
+        if (best && cost >= best.cost) return;
+        if (k === solo.length) { best = { cost:cost, pick:pick.slice() }; return; }
+        var c = solo[k].c;
+        if (!c.length) { pick[k] = ''; dfs(k + 1, cost, taken); return; }
+        c.forEach(function(nm, idx){
+          var again = taken.indexOf(nm) !== -1 || used.indexOf(nm) !== -1;
+          pick[k] = nm; dfs(k + 1, cost + idx * idx + (again ? 1000 : 0), taken.concat([nm]));
+        });
+      })(0, 0, []);
+      solo.forEach(function(g, k){ out[g.rows[0]] = best.pick[k]; if (best.pick[k]) used.push(best.pick[k]); });
+      todo = todo.filter(function(g){ return solo.indexOf(g) === -1; });
+    }
     todo.sort(function(a, b){ return a.c.length - b.c.length || a.rows[0] - b.rows[0]; }).forEach(function(g){
       g.rows.forEach(function(i){
         var nm = g.c.filter(function(n){ return used.indexOf(n) === -1; })[0] || g.c[0] || '';
