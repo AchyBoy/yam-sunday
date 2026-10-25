@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v7.3">
+<meta name="x-yam-version" content="v7.4">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -298,19 +298,26 @@
   function jobKey(j){ return (j.lbl || '').trim().toLowerCase(); }
   function canDo(d, j, nm){ return ((d.cant || {})[jobKey(j)] || []).indexOf(nm) === -1; }
   function pool(d, j){ return j.pool === 'kids' ? kidNames(d) : d.men; }
+  /* Rows with the same name (Singing, two young men) go round as ONE turn:
+     the next two after the second boy this week, not one step each. */
   function jobNext(d){
-    var out = d.jobs.map(function(){ return ''; }), used = [], forced = d.jNext || {}, todo = [];
+    var out = d.jobs.map(function(){ return ''; }), used = [], forced = d.jNext || {}, groups = {}, todo = [];
     d.jobs.forEach(function(j, i){
       var key = jobKey(j);
       if (!key) return;
       if (forced[key]) { out[i] = forced[key]; used.push(forced[key]); return; }
-      var c = turnOrder(pool(d, j).filter(function(nm){ return canDo(d, j, nm) && !isAway(d, nm); }),
-                        j.who || (d.jLast || {})[key]);
-      todo.push({ i:i, c:c });
+      if (!groups[key]) { groups[key] = { rows:[], last:(d.jLast || {})[key], j:j }; todo.push(groups[key]); }
+      groups[key].rows.push(i);
+      if (j.who) groups[key].last = j.who;
     });
-    todo.sort(function(a, b){ return a.c.length - b.c.length || a.i - b.i; }).forEach(function(t){
-      var nm = t.c.filter(function(n){ return used.indexOf(n) === -1; })[0] || t.c[0] || '';
-      out[t.i] = nm; if (nm) used.push(nm);
+    todo.forEach(function(g){
+      g.c = turnOrder(pool(d, g.j).filter(function(nm){ return canDo(d, g.j, nm) && !isAway(d, nm); }), g.last);
+    });
+    todo.sort(function(a, b){ return a.c.length - b.c.length || a.rows[0] - b.rows[0]; }).forEach(function(g){
+      g.rows.forEach(function(i){
+        var nm = g.c.filter(function(n){ return used.indexOf(n) === -1; })[0] || g.c[0] || '';
+        out[i] = nm; if (nm) used.push(nm);
+      });
     });
     return out;
   }
@@ -331,7 +338,7 @@
     if (!d.past) d.past = [];
     if (!d.testify) d.testify = { man:'', kids:['', ''] };
     if (!d.cant) d.cant = { lesson: ['Paul'] };       // lil Paul, not the lesson yet
-    if (d.rotV !== 2) {
+    if (!d.rotV) {
       /* 10-25, his words: alphabetical turns. Elder B has the lesson next,
          Ryan is out till January, the Blessing is one of the young men (Alex
          had it this week), and testimony never happened today, so it starts
@@ -347,6 +354,18 @@
         d.jNext = { lesson: 'Elder Bro B' };
         d.testify = { man:'', kids:['', ''] };
         d.tNext = { man:'Andrew', kids:['Josiah', 'Judah L'] };
+      }
+    }
+    if (d.rotV === 2) {
+      // 10-25: two young men sing each week, Josiah and Luke this week
+      d.rotV = 3;
+      var hasSing = (d.jobs || []).some(function(j){ return jobKey(j) === 'singing'; });
+      if (!hasSing && d.jobs) {
+        var now = !d.sunday || d.sunday <= '2026-10-25';
+        // the sheet has already moved on: this one is the next two after Luke
+        var nx2 = now ? ['Josiah', 'Luke'] : turnOrder(kidNames(d), 'Luke');
+        d.jobs.push({ lbl:'Singing', who: nx2[0] || '', pool:'kids' });
+        d.jobs.push({ lbl:'Singing', who: nx2[1] || '', pool:'kids' });
       }
     }
     if (d.rosterV !== ROSTER_V){
@@ -531,7 +550,8 @@
         var me = data.kids.filter(function(x){ return x.name === j.who; })[0];
         var here = data.kids.filter(function(x){ return x.here; }).map(function(x){ return x.name; });
         var from = here.length ? here : kidNames(data);
-        var sub = (me && me.here) ? '' : turnOrder(from, j.who).filter(function(n){ return n !== j.who; })[0];
+        var busyK = data.jobs.filter(function(x){ return x.pool === 'kids' && x.who; }).map(function(x){ return x.who; });
+        var sub = (me && me.here) ? '' : turnOrder(from, j.who).filter(function(n){ return busyK.indexOf(n) === -1; })[0];
         if (sub) {
           var bb = document.createElement('button'); bb.className = 'tsub';
           bb.innerHTML = esc(j.who) + ' not here? Tap and <b>' + esc(sub) + '</b> does it';
@@ -549,9 +569,14 @@
       if (ins.length) ins[0].focus();
     });
     jobsEl.appendChild(add);
-    var nx = jobNext(data), nl = data.jobs.map(function(j, i){
-      return nx[i] ? esc(j.lbl.trim()) + ' <b>' + esc(nx[i]) + '</b>' : '';
-    }).filter(Boolean);
+    var nx = jobNext(data), byLbl = {}, nl = [];
+    data.jobs.forEach(function(j, i){
+      if (!nx[i]) return;
+      var l = j.lbl.trim();
+      if (!byLbl[l]) { byLbl[l] = []; nl.push(l); }
+      byLbl[l].push(nx[i]);
+    });
+    nl = nl.map(function(l){ return esc(l) + ' <b>' + esc(byLbl[l].join(' & ')) + '</b>'; });
     document.getElementById('jNextTxt').innerHTML = nl.length ? 'Next Sunday: ' + nl.join(', ') : '';
   }
 
