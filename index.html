@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v7.2">
+<meta name="x-yam-version" content="v7.3">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -522,6 +522,23 @@
 
       d.appendChild(l); d.appendChild(w); d.appendChild(k);
       jobsEl.appendChild(d);
+
+      /* A young man's job (the Blessing) always names a backup, for a boy who
+         may not come (Caleb C, moving up to big church). Before the register
+         starts it is the next in turn; after, the next in turn who IS here,
+         and it goes once he is ticked. */
+      if (j.pool === 'kids' && j.who) {
+        var me = data.kids.filter(function(x){ return x.name === j.who; })[0];
+        var here = data.kids.filter(function(x){ return x.here; }).map(function(x){ return x.name; });
+        var from = here.length ? here : kidNames(data);
+        var sub = (me && me.here) ? '' : turnOrder(from, j.who).filter(function(n){ return n !== j.who; })[0];
+        if (sub) {
+          var bb = document.createElement('button'); bb.className = 'tsub';
+          bb.innerHTML = esc(j.who) + ' not here? Tap and <b>' + esc(sub) + '</b> does it';
+          bb.addEventListener('click', function(){ j.who = sub; save(); drawAll(); toast(sub + ' is up'); });
+          jobsEl.appendChild(bb);
+        }
+      }
     });
 
     var add = document.createElement('button');
