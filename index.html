@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v7.1">
+<meta name="x-yam-version" content="v7.2">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -162,6 +162,7 @@
 
   <h2>The men <span class="c" id="jobsLeft"></span></h2>
   <div id="jobs"></div>
+  <p class="tnext" id="jNextTxt"></p>
   <div class="men">
     <p class="lead">The men in the picker. Take one off or add one.</p>
     <div class="chips" id="men"></div>
@@ -246,79 +247,81 @@
   var RENAME = { "Bro Paul":"Paul", "Bro Daniel":"Daniel", "Bro Drew":"Andrew",
                  "The worship crew":"" };
 
+  /* ---------- turns ----------
+     Everything goes round ALPHABETICALLY (Andrew, his ask 10-25): next up is
+     the name after whoever had it last, wrapping back to the top. A man who
+     is out (Ryan till January) is skipped until his date. */
+  function abc(a, b){ a = a.toLowerCase(); b = b.toLowerCase(); return a < b ? -1 : a > b ? 1 : 0; }
+  function isAway(d, nm){ var u = (d.away || {})[nm]; return !!u && ymd(new Date()) < u; }
+  function turnOrder(names, last){
+    var s = names.slice().sort(abc), i = 0;
+    if (last) while (i < s.length && abc(s[i], last) <= 0) i++;
+    return s.slice(i).concat(s.slice(0, i));
+  }
+  function kidNames(d){ return d.kids.map(function(k){ return k.name; }); }
+
   /* ---------- testimony ----------
-     One teacher and two young men every Sunday, taken in turn. Whoever went
-     longest ago (or never) is next, list order breaks a tie, so a name added
-     later just joins the queue. A young man picked but not there that Sunday
-     is NOT marked as gone, so he comes up again the week after. */
-  function testiOrder(list, done, n, skip){
-    return list.map(function(nm, i){ return { nm:nm, i:i, d:done[nm] || '' }; })
-      .filter(function(x){ return skip.indexOf(x.nm) === -1; })
-      .sort(function(a, b){ return a.d < b.d ? -1 : a.d > b.d ? 1 : a.i - b.i; })
-      .slice(0, n).map(function(x){ return x.nm; });
-  }
-  function testiPicks(d, done, skip){
-    skip = skip || [];
-    var kids = d.kids.map(function(k){ return k.name; });
-    var m = testiOrder(d.men, done.m || {}, 1, skip), k = testiOrder(kids, done.k || {}, 2, skip);
-    return { man: m[0] || '', kids: [k[0] || '', k[1] || ''] };
-  }
-  // who testified on the sheet's Sunday, as the rotation will remember it
-  function testiDone(d){
-    var t = d.testify || { man:'', kids:[] }, day = d.sunday || ymd(new Date()),
-        done = { m: Object.assign({}, d.tDone.m), k: Object.assign({}, d.tDone.k) },
+     One teacher and two young men every Sunday, in turn. A young man picked
+     but not ticked here (once the register is being kept) is owed, so he
+     goes first next week. */
+  function testiState(d){
+    var t = d.testify || { man:'', kids:[] }, last = d.tLast || {},
         anyTicked = d.kids.some(function(k){ return k.here; });
-    if (t.man) done.m[t.man] = day;
-    t.kids.forEach(function(nm){
-      if (!nm) return;
+    var owed = t.kids.filter(function(nm){
+      if (!nm || !anyTicked) return false;
       var k = d.kids.filter(function(x){ return x.name === nm; })[0];
-      // nobody ticked at all = the register was not kept, so count him
-      if (!anyTicked || (k && k.here)) done.k[nm] = day;
+      return !!k && !k.here;
     });
-    return done;
+    var went = t.kids.filter(function(nm){ return nm && owed.indexOf(nm) === -1; });
+    var lastM = t.man || last.m || '', lastK = went.length ? went[went.length - 1] : (last.k || '');
+    var next;
+    if (d.tNext) next = { man: d.tNext.man || '', kids: (d.tNext.kids || []).concat(['', '']).slice(0, 2) };
+    else {
+      var man = turnOrder(d.men.filter(function(nm){ return !isAway(d, nm); }), lastM)[0] || '';
+      var ks = owed.concat(turnOrder(kidNames(d).filter(function(nm){ return owed.indexOf(nm) === -1; }), lastK));
+      next = { man: man, kids: [ks[0] || '', ks[1] || ''] };
+    }
+    return { next: next, last: { m: lastM, k: lastK } };
   }
-  // filing a Sunday away: remember who went, and line up the next three
+  // filing a Sunday away: remember where the turns got to, line up the next three
   function testiRoll(){
-    data.tDone = testiDone(data);
-    data.testify = testiPicks(data, data.tDone);
+    var st = testiState(data);
+    data.tLast = st.last; data.testify = st.next; delete data.tNext;
   }
 
   /* ---------- job rotation ----------
-     Each job goes to whichever man did THAT job longest ago (or never). A man
-     already holding a job this Sunday is passed over while anyone else is free,
-     and a man taken off a job's turns (lil Paul on the Lesson, for now) is
-     never put on it. It only fills an empty job, so a name picked by hand stays. */
+     Each job goes to the name after whoever had it this Sunday. A job can draw
+     on the young men instead (the Blessing), and a man taken off a job's turns
+     (lil Paul on the Lesson, for now) is never put on it. The job with the
+     fewest people who can do it picks first, and a man already holding a job
+     next Sunday is passed over while someone else is free. */
   function jobKey(j){ return (j.lbl || '').trim().toLowerCase(); }
-  function lastAny(d, nm){
-    var best = '';
-    Object.keys(d.jDone || {}).forEach(function(k){ var v = d.jDone[k][nm] || ''; if (v > best) best = v; });
-    return best;
-  }
   function canDo(d, j, nm){ return ((d.cant || {})[jobKey(j)] || []).indexOf(nm) === -1; }
-  function jobFill(d){
-    var used = d.jobs.map(function(j){ return j.who; }).filter(Boolean);
-    d.jobs.forEach(function(j){
-      if (j.who || !jobKey(j)) return;
-      var done = (d.jDone || {})[jobKey(j)] || {};
-      var c = d.men.map(function(nm, i){ return { nm:nm, i:i, d:done[nm] || '', a:lastAny(d, nm) }; })
-        .filter(function(x){ return canDo(d, j, x.nm); })
-        .sort(function(a, b){
-          var ua = used.indexOf(a.nm) !== -1, ub = used.indexOf(b.nm) !== -1;
-          if (ua !== ub) return ua ? 1 : -1;
-          return a.d < b.d ? -1 : a.d > b.d ? 1 : a.a < b.a ? -1 : a.a > b.a ? 1 : a.i - b.i;
-        });
-      if (c.length) { j.who = c[0].nm; used.push(c[0].nm); }
+  function pool(d, j){ return j.pool === 'kids' ? kidNames(d) : d.men; }
+  function jobNext(d){
+    var out = d.jobs.map(function(){ return ''; }), used = [], forced = d.jNext || {}, todo = [];
+    d.jobs.forEach(function(j, i){
+      var key = jobKey(j);
+      if (!key) return;
+      if (forced[key]) { out[i] = forced[key]; used.push(forced[key]); return; }
+      var c = turnOrder(pool(d, j).filter(function(nm){ return canDo(d, j, nm) && !isAway(d, nm); }),
+                        j.who || (d.jLast || {})[key]);
+      todo.push({ i:i, c:c });
     });
+    todo.sort(function(a, b){ return a.c.length - b.c.length || a.i - b.i; }).forEach(function(t){
+      var nm = t.c.filter(function(n){ return used.indexOf(n) === -1; })[0] || t.c[0] || '';
+      out[t.i] = nm; if (nm) used.push(nm);
+    });
+    return out;
   }
-  // filing a Sunday away: remember who had each job, blank them, line up the next
   function jobRoll(){
-    var day = data.sunday || ymd(new Date());
-    data.jobs.forEach(function(j){
-      if (!j.who || !jobKey(j)) return;
-      (data.jDone[jobKey(j)] = data.jDone[jobKey(j)] || {})[j.who] = day;
+    var nx = jobNext(data);
+    if (!data.jLast) data.jLast = {};
+    data.jobs.forEach(function(j, i){
+      if (j.who && jobKey(j)) data.jLast[jobKey(j)] = j.who;
+      j.who = nx[i];
     });
-    data.jobs.forEach(function(j){ j.who = ''; });
-    jobFill(data);
+    data.jNext = {};
   }
 
   function migrate(d){
@@ -326,20 +329,25 @@
     if (!d.kids) d.kids = [];
     if (!d.men)  d.men  = [];
     if (!d.past) d.past = [];
-    if (!d.tDone) d.tDone = { m:{}, k:{} };
-    if (!d.testify) d.testify = testiPicks(d, d.tDone);
+    if (!d.testify) d.testify = { man:'', kids:['', ''] };
     if (!d.cant) d.cant = { lesson: ['Paul'] };       // lil Paul, not the lesson yet
-    if (!d.jDone) {
-      // first time: learn the rotation so far from the Sundays already filed
-      d.jDone = {};
-      d.past.slice().reverse().forEach(function(p){
-        var day = p.sunday || (p.savedAt ? ymd(new Date(p.savedAt)) : '');
-        if (!day) return;
-        (p.jobs || []).forEach(function(j){
-          if (!j.who || !jobKey(j)) return;
-          (d.jDone[jobKey(j)] = d.jDone[jobKey(j)] || {})[j.who] = day;
-        });
+    if (d.rotV !== 2) {
+      /* 10-25, his words: alphabetical turns. Elder B has the lesson next,
+         Ryan is out till January, the Blessing is one of the young men (Alex
+         had it this week), and testimony never happened today, so it starts
+         next time with Andrew, Josiah and Judah. */
+      d.rotV = 2;
+      d.away = d.away || {}; if (!d.away.Ryan) d.away.Ryan = '2027-01-01';
+      var ai = d.men.indexOf('Alex Simon');
+      if (ai !== -1 && d.kids.some(function(k){ return k.name === 'Alex S'; })) d.men.splice(ai, 1);
+      (d.jobs || []).forEach(function(j){
+        if (jobKey(j) === 'blessing') { j.pool = 'kids'; if (j.who === 'Alex Simon') j.who = 'Alex S'; }
       });
+      if (!d.sunday || d.sunday <= '2026-10-25') {
+        d.jNext = { lesson: 'Elder Bro B' };
+        d.testify = { man:'', kids:['', ''] };
+        d.tNext = { man:'Andrew', kids:['Josiah', 'Judah L'] };
+      }
     }
     if (d.rosterV !== ROSTER_V){
       // ⚠️ ADD what is missing. v2 replaced the list outright and lost three
@@ -468,7 +476,7 @@
       var sel = document.createElement('select');
       function fill(){
         sel.innerHTML = '';
-        var names = data.men.slice();
+        var names = pool(data, j).slice();
         // a name assigned before it was taken off the list must not vanish
         if (j.who.trim() && names.indexOf(j.who) === -1) names.push(j.who);
         var o0 = document.createElement('option');
@@ -493,7 +501,8 @@
         if (sel.value === '__add'){
           var n = (window.prompt('Name') || '').trim();
           if (n){
-            if (data.men.indexOf(n) === -1) data.men.push(n);
+            if (j.pool === 'kids') { if (kidNames(data).indexOf(n) === -1) data.kids.push({ name:n, here:false }); }
+            else if (data.men.indexOf(n) === -1) data.men.push(n);
             j.who = n;
           }
           save(); drawAll(); return;
@@ -523,6 +532,10 @@
       if (ins.length) ins[0].focus();
     });
     jobsEl.appendChild(add);
+    var nx = jobNext(data), nl = data.jobs.map(function(j, i){
+      return nx[i] ? esc(j.lbl.trim()) + ' <b>' + esc(nx[i]) + '</b>' : '';
+    }).filter(Boolean);
+    document.getElementById('jNextTxt').innerHTML = nl.length ? 'Next Sunday: ' + nl.join(', ') : '';
   }
 
   // which men take turns at one job: tap a name to take him off it or put him back
@@ -538,7 +551,7 @@
     document.body.appendChild(bg);
     function draw(){
       var el = document.getElementById('tTurns'); el.innerHTML = '';
-      data.men.forEach(function(nm){
+      pool(data, j).forEach(function(nm){
         var b = document.createElement('button'), out = off.indexOf(nm) !== -1;
         b.className = 'chip'; b.style.opacity = out ? '.4' : '1';
         b.style.textDecoration = out ? 'line-through' : 'none';
@@ -819,13 +832,14 @@
   function backup(nm){
     var here = data.kids.filter(function(k){ return k.here; }).map(function(k){ return k.name; });
     if (!here.length || here.indexOf(nm) !== -1) return '';
-    return testiOrder(here, data.tDone.k || {}, 1, testiNames())[0] || '';
+    var tn = testiNames();
+    return turnOrder(here, nm).filter(function(n){ return tn.indexOf(n) === -1; })[0] || '';
   }
 
   /* The heads up he sends the class: who is up this Sunday and next, and
      that everybody keeps a little something ready in case. */
   function headsText(){
-    var nx = testiPicks(data, testiDone(data), testiNames()),
+    var nx = testiState(data).next,
         nn = [nx.man].concat(nx.kids).filter(Boolean), tn = testiNames(),
         d = data.sunday ? fromYmd(data.sunday) : sundayFor(Date.now()),
         d2 = new Date(d); d2.setDate(d2.getDate() + 7);
@@ -878,7 +892,7 @@
     var open = 1 - (t.man ? 1 : 0) + 2 - t.kids.filter(Boolean).length;
     document.getElementById('tLeft').textContent = open ? open + ' still open' : 'all set';
     // next Sunday, assuming these three go this week
-    var nx = testiPicks(data, testiDone(data), testiNames()), nn = [nx.man].concat(nx.kids).filter(Boolean);
+    var nx = testiState(data).next, nn = [nx.man].concat(nx.kids).filter(Boolean);
     document.getElementById('tNext').innerHTML = nn.length ? 'Next Sunday: <b>' + esc(nn.join(', ')) + '</b>' : '';
   }
 
