@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="x-yam-version" content="v7.7">
+<meta name="x-yam-version" content="v7.8">
 <title>YAM, who has what</title>
 <style>
   :root{ --ink:#f6efe3; --dim:#b9aa92; --gold:#d8ab52; --deep:#120f0c; --card:#1c1713; --line:#2e251c }
@@ -103,9 +103,11 @@
     padding:11px 17px; font-size:16px; cursor:pointer}
   .men{display:none; margin-top:10px}
   body.editing .men{display:block}
-  .cake{position:relative; display:inline-flex; align-items:center; margin:0 10px 0 -4px; padding:6px 10px;
-        border:1px dashed var(--line); border-radius:999px; color:var(--dim); font-size:14px}
-  .cake input{position:absolute; inset:0; width:100%; height:100%; opacity:0; font-size:16px}
+  .bday{position:relative}
+  .bday .val{flex:1; text-align:right; font-size:16px; font-weight:600; padding:8px 30px 8px 8px}
+  .bday .val.none{color:#6b5e4b; font-weight:400}
+  .bday .val small{display:block; color:var(--dim); font-size:12px; font-weight:400}
+  .bday input[type=date]{position:absolute; inset:0; width:100%; height:100%; opacity:0; font-size:16px}
   .men .lead{color:#7c6e59; font-size:13px; margin:0 2px 9px}
   .empty{color:#7c6e59; font-size:14px; line-height:1.55; margin:0 2px}
   .tnext{color:var(--dim); font-size:14px; line-height:1.5; margin:2px 2px 0}
@@ -168,7 +170,7 @@
   <p class="tnext" id="jNextTxt"></p>
   <p class="tnext" id="bdayTxt"></p>
   <div class="men">
-    <p class="lead">The men in the picker. Tap a name to take him off, 🎂 for his birthday.</p>
+    <p class="lead">The men in the picker. Take one off or add one.</p>
     <div class="chips" id="men"></div>
   </div>
 
@@ -176,6 +178,9 @@
   <div id="testi"></div>
   <p class="tnext" id="tNext"></p>
   <div class="row" style="margin-top:12px"><button id="heads">📣 Send a heads up</button></div>
+
+  <h2>Teacher birthdays</h2>
+  <div id="tbdays"></div>
 
   <h2>Who is here <span class="c" id="count"></span></h2>
   <div class="kids" id="kids"></div>
@@ -677,19 +682,6 @@
         data.men.splice(i, 1); save(); drawAll();
       });
       menEl.appendChild(b);
-      // his birthday: the iPhone calendar, month and day is enough
-      var cb = document.createElement('label'); cb.className = 'cake';
-      var bd = (data.menBday || {})[n], a = ageInfo(bd);
-      cb.innerHTML = '🎂 ' + (a ? esc(a.md) : '');
-      var di = document.createElement('input'); di.type = 'date'; di.value = bd || '';
-      di.setAttribute('aria-label', n + ' birthday');
-      di.addEventListener('change', function(){
-        if (!data.menBday) data.menBday = {};
-        if (di.value) data.menBday[n] = di.value; else delete data.menBday[n];
-        di.blur(); save(); drawAll();
-      });
-      cb.appendChild(di);
-      menEl.appendChild(cb);
     });
     var add = document.createElement('button');
     add.className = 'add'; add.textContent = '+ Add a man';
@@ -1015,8 +1007,30 @@
     }).join('<br>');
   }
 
+  // one row per man, tap it for the iPhone calendar (month and day is enough)
+  function drawTeacherBdays(){
+    var box = document.getElementById('tbdays'); box.innerHTML = '';
+    data.men.forEach(function(n){
+      var bd = (data.menBday || {})[n], a = ageInfo(bd);
+      var row = document.createElement('label'); row.className = 'job bday';
+      var when = !a ? '' : a.days === 0 ? 'TODAY' : a.days === 1 ? 'tomorrow' : 'in ' + a.days + ' days';
+      row.innerHTML = '<span class="lbl"><input value="' + esc(n).replace(/"/g, '&quot;') + '" readonly tabindex="-1"></span>' +
+        '<span class="val' + (a ? '' : ' none') + '">' + (a ? '🎂 ' + esc(a.md) + '<small>' + when + '</small>' : 'Add birthday') + '</span>' +
+        '<span class="chev" style="position:absolute;right:12px;color:var(--gold)">▼</span>';
+      var di = document.createElement('input'); di.type = 'date'; di.value = bd || '';
+      di.setAttribute('aria-label', n + ' birthday');
+      di.addEventListener('change', function(){
+        if (!data.menBday) data.menBday = {};
+        if (di.value) data.menBday[n] = di.value; else delete data.menBday[n];
+        di.blur(); save(); drawAll(); toast(di.value ? 'Saved' : 'Birthday taken off');
+      });
+      row.appendChild(di);
+      box.appendChild(row);
+    });
+  }
+
   function drawAll(){
-    drawBdays(); drawJobs(); drawTesti(); drawMen(); drawKids(); drawPast(); counts();
+    drawBdays(); drawTeacherBdays(); drawJobs(); drawTesti(); drawMen(); drawKids(); drawPast(); counts();
     document.getElementById('whenTxt').textContent = data.when || 'Pick a date';
     var pk = document.getElementById('whenPick');
     if (document.activeElement !== pk) pk.value = data.sunday || '';
